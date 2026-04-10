@@ -87,7 +87,7 @@ window.showExplorer=function(){
 };
 
 // ── Target view ──
-const COLORS={subdomains:'#d79921',dns:'#458588',http:'#98971a',screenshots:'#b16286',ports:'#d65d0e',js:'#689d6a',historical:'#cc241d',endpoints:'#458588',infra:'#b16286',logs:'#928374'};
+const COLORS={subdomains:'#d79921',dns:'#458588',http:'#98971a',screenshots:'#b16286',ports:'#d65d0e',js:'#689d6a',historical:'#cc241d',endpoints:'#458588',dorks:'#fabd2f',infra:'#b16286',logs:'#928374'};
 const SECTIONS=[
   {id:'subdomains',label:'subs'},{id:'dns',label:'dns'},
   {id:'http',label:'httpx'},{id:'screenshots',label:'screenshots'},
@@ -95,6 +95,7 @@ const SECTIONS=[
   {id:'js',label:'js',tabs:[{key:'endpoints',label:'endpoints'},{key:'secrets',label:'secrets'},{key:'api',label:'api'},{key:'buckets',label:'buckets'},{key:'ws',label:'websockets'}]},
   {id:'historical',label:'historical'},
   {id:'endpoints',label:'endpoints',tabs:[{key:'all',label:'all'},{key:'auth',label:'auth/admin'},{key:'api',label:'api paths'},{key:'sensitive',label:'sensitive'}]},
+  {id:'dorks',label:'dorks',tabs:[{key:'all',label:'all findings'},{key:'config',label:'config files'},{key:'backups',label:'backups'},{key:'logs',label:'logs'},{key:'admin',label:'admin panels'},{key:'cloud',label:'cloud assets'},{key:'auth',label:'auth tokens'},{key:'active',label:'active hits'},{key:'confirmed',label:'confirmed'}]},
   {id:'infra',label:'infra',tabs:[{key:'ips',label:'ip groups'},{key:'cdn',label:'cdn'},{key:'orgs',label:'ip > org'}]},
   {id:'monitor',label:'monitor',isCustom:true},
   {id:'logs',label:'logs',isMeta:true}
@@ -114,6 +115,7 @@ function buildStats(stats){
     {key:'js',label:'js endpoints',val:s.js_endpoints??0,color:COLORS.js},
     {key:'historical',label:'historical',val:s.historical_urls??0,color:COLORS.historical},
     {key:'endpoints',label:'crawled',val:s.crawled_endpoints??0,color:COLORS.endpoints},
+    {key:'dorks',label:'dork findings',val:s.dork_findings??0,color:COLORS.dorks},
   ];
   let h='';for(const it of items)h+=`<div class="stat-card" style="--card-color:${it.color}" onclick="jumpTo('${it.key}')"><div class="stat-val">${it.val.toLocaleString()}</div><div class="stat-label">${it.label}</div></div>`;
   document.getElementById('stats-grid').innerHTML=h;
@@ -262,7 +264,7 @@ window.openTarget=async function(name){
   const stats=await fetchJSON(`/api/stats?target=${name}`);
   if(stats){document.getElementById('m-domain').textContent=stats.domain||name;document.getElementById('m-date').textContent=stats.scan_date?new Date(stats.scan_date).toLocaleDateString():'--';buildStats(stats)}
   const s=stats?.statistics||{};
-  const navCounts={subdomains:s.total_subdomains,dns:s.resolved_hosts,http:s.alive_services,screenshots:s.screenshots,ports:s.open_ports,js:s.js_endpoints,historical:s.historical_urls,endpoints:s.crawled_endpoints};
+  const navCounts={subdomains:s.total_subdomains,dns:s.resolved_hosts,http:s.alive_services,screenshots:s.screenshots,ports:s.open_ports,js:s.js_endpoints,historical:s.historical_urls,endpoints:s.crawled_endpoints,dorks:s.dork_findings};
   for(const[k,v]of Object.entries(navCounts)){const el=document.getElementById('navcount-'+k);if(el&&v!==undefined)el.textContent='('+v+')'}
 
   await Promise.all([
@@ -283,6 +285,15 @@ window.openTarget=async function(name){
     loadTextList('endpoints_auth','data-endpoints-auth','tc-endpoints-auth',T('endpoints/interesting_paths.txt'))(),
     loadTextList('endpoints_api','data-endpoints-api','tc-endpoints-api',T('endpoints/api_paths.txt'))(),
     loadTextList('endpoints_sensitive','data-endpoints-sensitive','tc-endpoints-sensitive',T('endpoints/sensitive_files.txt'))(),
+    loadTextList('dorks_all','data-dorks-all','tc-dorks-all',T('dorks/all_findings.txt'))(),
+    loadTextList('dorks_config','data-dorks-config','tc-dorks-config',T('dorks/passive_config_files.txt'))(),
+    loadTextList('dorks_backups','data-dorks-backups','tc-dorks-backups',T('dorks/passive_backup_files.txt'))(),
+    loadTextList('dorks_logs','data-dorks-logs','tc-dorks-logs',T('dorks/passive_log_files.txt'))(),
+    loadTextList('dorks_admin','data-dorks-admin','tc-dorks-admin',T('dorks/passive_admin_panels.txt'))(),
+    loadTextList('dorks_cloud','data-dorks-cloud','tc-dorks-cloud',T('dorks/passive_cloud_assets.txt'))(),
+    loadTextList('dorks_auth','data-dorks-auth','tc-dorks-auth',T('dorks/passive_auth_tokens.txt'))(),
+    loadTextList('dorks_active','data-dorks-active','tc-dorks-active',T('dorks/active_hits.txt'))(),
+    loadTextList('dorks_confirmed','data-dorks-confirmed','tc-dorks-confirmed',T('dorks/active_confirmed.txt'))(),
     loadInfraIPs(),
     loadTextList('infra_cdn','data-infra-cdn','tc-infra-cdn',T('infra/cdn_hosts.txt'))(),
     loadTextList('infra_orgs','data-infra-orgs','tc-infra-orgs',T('infra/ip_orgs.txt'))(),
@@ -294,7 +305,7 @@ window.openTarget=async function(name){
 const MODULES=[
   {id:'subdomains',label:'Subdomain Discovery'},{id:'dns',label:'DNS Resolution'},{id:'http',label:'HTTP Probing'},
   {id:'screenshots',label:'Screenshots'},{id:'ports',label:'Port Scanning'},{id:'js',label:'JS Analysis'},
-  {id:'historical',label:'Historical URLs'},{id:'crawl',label:'Endpoint Crawling'},{id:'infra',label:'Infra Mapping'},{id:'report',label:'Report Generation'}
+  {id:'historical',label:'Historical URLs'},{id:'crawl',label:'Endpoint Crawling'},{id:'dorks',label:'Dork-Style Discovery'},{id:'infra',label:'Infra Mapping'},{id:'report',label:'Report Generation'}
 ];
 const enabledModules=new Set(MODULES.map(m=>m.id));
 

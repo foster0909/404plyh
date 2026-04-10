@@ -91,6 +91,10 @@ check_dependencies() {
     check_tool "hakrawler" || ((missing_optional++))
 
     echo ""
+    echo -e "${WHITE}Dorking (Sensitive File Discovery):${RESET}"
+    check_tool "httpx" || ((missing_optional++))  # reused from HTTP probing
+
+    echo ""
     echo -e "${WHITE}Infrastructure:${RESET}"
     check_tool "whois" || ((missing_optional++))
 

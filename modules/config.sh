@@ -4,8 +4,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Configuration defaults
-THREADS="${THREADS:-50}"
-RATE_LIMIT="${RATE_LIMIT:-1000}"
+# NOTE: These defaults are intentionally conservative to avoid triggering
+# WAFs, rate-limiters, or IP bans. Override with CLI flags or env vars
+# if you need more speed on permissive targets.
+THREADS="${THREADS:-15}"
+RATE_LIMIT="${RATE_LIMIT:-150}"
 RESOLVERS="${RESOLVERS:-}"
 OUTPUT_DIR="${OUTPUT_DIR:-}"
 DOMAIN="${DOMAIN:-}"
@@ -15,6 +18,7 @@ NAABU_TOP_PORTS="${NAABU_TOP_PORTS:-1000}"
 KATANA_DEPTH="${KATANA_DEPTH:-3}"
 HAKRAWLER_DEPTH="${HAKRAWLER_DEPTH:-2}"
 HTTPX_TIMEOUT="${HTTPX_TIMEOUT:-10}"
+DORK_THREADS="${DORK_THREADS:-10}"
 
 # Python tool paths (override with env vars)
 LINKFINDER_PATH="${LINKFINDER_PATH:-linkfinder.py}"
@@ -30,6 +34,7 @@ SKIP_JS=false
 SKIP_HISTORICAL=false
 SKIP_CRAWL=false
 SKIP_INFRA=false
+SKIP_DORKS=false
 SKIP_REPORT=false
 CHECK_DEPS_ONLY=false
 

@@ -224,6 +224,7 @@ def build_stats(target_dir):
             "js_endpoints": count_lines(d / "js" / "endpoints.txt"),
             "historical_urls": count_lines(d / "historical" / "all_urls.txt"),
             "crawled_endpoints": count_lines(d / "endpoints" / "all.txt"),
+            "dork_findings": count_lines(d / "dorks" / "all_findings.txt"),
         },
     }
 
@@ -424,6 +425,7 @@ def make_handler(projects_dir, scan_manager):
                     {"id": "js", "label": "JavaScript Analysis"},
                     {"id": "historical", "label": "Historical URLs"},
                     {"id": "crawl", "label": "Endpoint Crawling"},
+                    {"id": "dorks", "label": "Dork-Style Discovery"},
                     {"id": "infra", "label": "Infrastructure Mapping"},
                     {"id": "report", "label": "Report Generation"},
                 ]})

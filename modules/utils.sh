@@ -85,6 +85,7 @@ create_directories() {
         "$OUTPUT_DIR/historical"
         "$OUTPUT_DIR/endpoints"
         "$OUTPUT_DIR/infra"
+        "$OUTPUT_DIR/dorks"
         "$OUTPUT_DIR/reports"
         "$OUTPUT_DIR/logs"
         "$OUTPUT_DIR/monitor/baselines"

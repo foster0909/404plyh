@@ -39,6 +39,7 @@ source "$MODULES_DIR/ports.sh"        # Module 5: Port Scanning
 source "$MODULES_DIR/js.sh"           # Module 6: JS Analysis
 source "$MODULES_DIR/historical.sh"   # Module 7: Historical URLs
 source "$MODULES_DIR/crawl.sh"        # Module 8: Endpoint Crawling
+source "$MODULES_DIR/dorks.sh"        # Module: Dork-Style Sensitive File Discovery
 source "$MODULES_DIR/infra.sh"        # Module 9: Infrastructure Mapping
 source "$MODULES_DIR/report.sh"       # Module 10: Report Generation
 
@@ -71,6 +72,7 @@ usage() {
     echo "      --skip-js                Skip JavaScript analysis"
     echo "      --skip-historical        Skip historical URL discovery"
     echo "      --skip-crawl             Skip endpoint crawling"
+    echo "      --skip-dorks             Skip dork-style sensitive file discovery"
     echo "      --skip-infra             Skip infrastructure mapping"
     echo "      --skip-report            Skip report generation"
     echo ""
@@ -109,6 +111,7 @@ parse_args() {
             --skip-js)           SKIP_JS=true; shift ;;
             --skip-historical)   SKIP_HISTORICAL=true; shift ;;
             --skip-crawl)        SKIP_CRAWL=true; shift ;;
+            --skip-dorks)        SKIP_DORKS=true; shift ;;
             --skip-infra)        SKIP_INFRA=true; shift ;;
             --skip-report)       SKIP_REPORT=true; shift ;;
             --check-deps)        CHECK_DEPS_ONLY=true; shift ;;
@@ -210,6 +213,7 @@ main() {
     handle_recursion                #    (recursive JS discovery)
     module_historical               # 7. Historical URLs
     module_crawl_endpoints          # 8. Crawl endpoints
+    module_dorks                    #    Dork-style sensitive file discovery
     module_infra_mapping            # 9. Map infrastructure
     module_report                   # 10. Generate reports
 
