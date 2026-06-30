@@ -37,17 +37,25 @@ while IFS= read -r target_dir; do
     [[ -z "$target_dir" ]] && continue
     COUNT=$((COUNT + 1))
 
-    # Extract domain from directory name (strip recon_ prefix if present)
-    domain="${target_dir#recon_}"
     target_path="$PROJECTS_DIR/$target_dir"
-
-    echo ""
-    echo "── [$COUNT/$TOTAL] $domain ──"
 
     if [[ ! -d "$target_path" ]]; then
         echo "[!] Target directory not found: $target_path — skipping"
         continue
     fi
+
+    # Extract domain: prefer summary.json, fallback to dir name heuristic
+    domain=""
+    summary_file="$target_path/reports/summary.json"
+    if [[ -f "$summary_file" ]]; then
+        domain=$(jq -r '.target // empty' "$summary_file" 2>/dev/null)
+    fi
+    if [[ -z "$domain" ]]; then
+        domain="${target_dir#recon_}"
+    fi
+
+    echo ""
+    echo "── [$COUNT/$TOTAL] $domain ──"
 
     # Run monitor
     bash "$SCRIPT_DIR/monitor.sh" -d "$domain" -o "$target_path"

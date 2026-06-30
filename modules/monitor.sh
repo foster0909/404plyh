@@ -47,28 +47,28 @@ monitor_scan_subdomains() {
     # subfinder
     if require_tool "subfinder"; then
         run_safe "subfinder (monitor)" \
-            "subfinder -d '$DOMAIN' -all -silent -t $THREADS -o '$scan_dir/subfinder.txt'"
+            "timeout 120 subfinder -d '$DOMAIN' -all -silent -t $THREADS -o '$scan_dir/subfinder.txt'"
         [[ -s "$scan_dir/subfinder.txt" ]] && cat "$scan_dir/subfinder.txt" >> "$combined"
     fi
 
     # amass (passive)
     if require_tool "amass"; then
         run_safe "amass passive (monitor)" \
-            "amass enum -passive -d '$DOMAIN' -o '$scan_dir/amass.txt' 2>>'$LOG_FILE'"
+            "timeout 120 amass enum -passive -d '$DOMAIN' -o '$scan_dir/amass.txt' 2>>'$LOG_FILE'"
         [[ -s "$scan_dir/amass.txt" ]] && cat "$scan_dir/amass.txt" >> "$combined"
     fi
 
     # assetfinder
     if require_tool "assetfinder"; then
         run_safe "assetfinder (monitor)" \
-            "assetfinder --subs-only '$DOMAIN' > '$scan_dir/assetfinder.txt'"
+            "timeout 60 assetfinder --subs-only '$DOMAIN' > '$scan_dir/assetfinder.txt'"
         [[ -s "$scan_dir/assetfinder.txt" ]] && cat "$scan_dir/assetfinder.txt" >> "$combined"
     fi
 
     # crt.sh
     step "Querying crt.sh"
     local crtsh_url="https://crt.sh/?q=%25.${DOMAIN}&output=json"
-    curl -s "$crtsh_url" 2>/dev/null \
+    curl -s --connect-timeout 10 --max-time 30 "$crtsh_url" 2>/dev/null \
         | jq -r '.[].name_value' 2>/dev/null \
         | sed 's/\*\.//g' \
         | sort -u >> "$combined" || true
@@ -93,7 +93,7 @@ monitor_scan_ports() {
 
     # Resolve DNS first if puredns is available
     if require_tool "puredns"; then
-        local puredns_cmd="puredns resolve '$sub_input' -w '$scan_dir/resolved.txt' -t $THREADS"
+        local puredns_cmd="timeout 180 puredns resolve '$sub_input' -w '$scan_dir/resolved.txt' -t $THREADS"
         if [[ -n "$RESOLVERS" && -f "$RESOLVERS" ]]; then
             puredns_cmd+=" -r '$RESOLVERS'"
         elif [[ -f "$SCRIPT_DIR/resolvers.txt" ]]; then
@@ -109,7 +109,7 @@ monitor_scan_ports() {
     # naabu port scan
     if require_tool "naabu"; then
         run_safe "naabu scan (monitor)" \
-            "naabu -l '$sub_input' \
+            "timeout 300 naabu -l '$sub_input' \
                 -top-ports $NAABU_TOP_PORTS \
                 -rate $RATE_LIMIT \
                 -o '$scan_dir/ports.txt' 2>>'$LOG_FILE'"

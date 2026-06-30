@@ -21,7 +21,7 @@ function makePaged(cid,items,renderFn,filterFn){
     const pages=Math.ceil(filtered.length/PAGE_SZ),start=page*PAGE_SZ,slice=filtered.slice(start,start+PAGE_SZ);
     let h=renderFn(slice,query,start);
     if(pages>1){
-      h+=`<div class="paging"><span class="paging-info">${start+1}-${Math.min(start+PAGE_SZ,filtered.length)} of ${filtered.length}</span><div class="paging-btns">`;
+      h+=`<div class="paging"><span class="paging-info">${start+1}–${Math.min(start+PAGE_SZ,filtered.length)} of ${filtered.length}</span><div class="paging-btns">`;
       h+=`<button class="pg-btn" onclick="_pgNav(${id},'prev')" ${page===0?'disabled':''}>prev</button>`;
       let bs=Math.max(0,page-2),be=Math.min(pages,bs+5);if(be-bs<5)bs=Math.max(0,be-5);
       for(let i=bs;i<be;i++)h+=`<button class="pg-btn ${i===page?'active':''}" onclick="_pgNav(${id},'go',${i})">${i+1}</button>`;
@@ -46,27 +46,25 @@ async function loadExplorer(){
 function renderTargets(targets){
   const el=document.getElementById('targets-container');
   if(!targets.length){el.innerHTML='<div class="empty-state"><p>no targets found</p><p>start a scan or point dashboard at your projects directory</p></div>';return}
-  let h='<div class="explorer-grid">';
+  let h='<div class="target-list">';
   for(const t of targets){
     const s=t.stats||{};
     const date=t.scan_date?new Date(t.scan_date).toLocaleDateString():(t.last_modified?new Date(t.last_modified*1000).toLocaleDateString():'');
     const mon=t.monitor_enabled;
-    h+=`<div class="target-card">`;
-    h+=`<div onclick="openTarget('${esc(t.name)}')" style="cursor:pointer">`;
-    h+=`<div class="tc-domain">${esc(t.domain||t.name)}</div>`;
-    if(date)h+=`<div class="tc-date">${date}</div>`;
-    h+=`<div class="tc-stats">`;
-    h+=`<span class="tc-stat"><b>${s.total_subdomains||0}</b>subs</span>`;
-    h+=`<span class="tc-stat"><b>${s.alive_services||0}</b>alive</span>`;
-    h+=`<span class="tc-stat"><b>${s.open_ports||0}</b>ports</span>`;
-    h+=`<span class="tc-stat"><b>${s.js_endpoints||0}</b>js</span>`;
-    h+=`<span class="tc-stat"><b>${s.crawled_endpoints||0}</b>endpoints</span>`;
+    h+=`<div class="target-row" onclick="openTarget('${esc(t.name)}')">`;
+    h+=`<div class="tr-left">`;
+    h+=`<span class="tr-domain">${esc(t.domain||t.name)}</span>`;
+    h+=`<span class="tr-stats">`;
+    if(s.total_subdomains)h+=`<span><b>${s.total_subdomains}</b>subs</span>`;
+    if(s.alive_services)h+=`<span><b>${s.alive_services}</b>alive</span>`;
+    if(s.open_ports)h+=`<span><b>${s.open_ports}</b>ports</span>`;
+    if(s.js_endpoints)h+=`<span><b>${s.js_endpoints}</b>js</span>`;
+    if(s.crawled_endpoints)h+=`<span><b>${s.crawled_endpoints}</b>endpoints</span>`;
+    h+=`</span></div>`;
+    h+=`<div class="tr-right">`;
+    if(date)h+=`<span class="tr-date">${date}</span>`;
+    h+=`<div class="monitor-sw" onclick="event.stopPropagation()"><label class="toggle-sw"><input type="checkbox" ${mon?'checked':''} onchange="toggleMonitor('${esc(t.name)}',this.checked)"/><span class="toggle-slider"></span></label></div>`;
     h+=`</div></div>`;
-    h+=`<div class="tc-monitor-row">`;
-    h+=`<span class="tc-monitor-label">${mon?'<span class="active-dot"></span>':''} daily monitor</span>`;
-    h+=`<label class="toggle-sw" onclick="event.stopPropagation()"><input type="checkbox" ${mon?'checked':''} onchange="toggleMonitor('${esc(t.name)}',this.checked)"/><span class="toggle-slider"></span></label>`;
-    h+=`</div>`;
-    h+=`</div>`;
   }
   el.innerHTML=h+'</div>';
 }
@@ -87,7 +85,6 @@ window.showExplorer=function(){
 };
 
 // ── Target view ──
-const COLORS={subdomains:'#d79921',dns:'#458588',http:'#98971a',screenshots:'#b16286',ports:'#d65d0e',js:'#689d6a',historical:'#cc241d',endpoints:'#458588',dorks:'#fabd2f',infra:'#b16286',logs:'#928374'};
 const SECTIONS=[
   {id:'subdomains',label:'subs'},{id:'dns',label:'dns'},
   {id:'http',label:'httpx'},{id:'screenshots',label:'screenshots'},
@@ -107,26 +104,33 @@ function T(p){return`/api/file/${currentTarget}/${p}`}
 function buildStats(stats){
   const s=stats?.statistics||{};
   const items=[
-    {key:'subdomains',label:'subdomains',val:s.total_subdomains??0,color:COLORS.subdomains},
-    {key:'dns',label:'resolved',val:s.resolved_hosts??0,color:COLORS.dns},
-    {key:'http',label:'alive',val:s.alive_services??0,color:COLORS.http},
-    {key:'screenshots',label:'screenshots',val:s.screenshots??0,color:COLORS.screenshots},
-    {key:'ports',label:'ports',val:s.open_ports??0,color:COLORS.ports},
-    {key:'js',label:'js endpoints',val:s.js_endpoints??0,color:COLORS.js},
-    {key:'historical',label:'historical',val:s.historical_urls??0,color:COLORS.historical},
-    {key:'endpoints',label:'crawled',val:s.crawled_endpoints??0,color:COLORS.endpoints},
-    {key:'dorks',label:'dork findings',val:s.dork_findings??0,color:COLORS.dorks},
+    {key:'subdomains',label:'subs',val:s.total_subdomains??0},
+    {key:'dns',label:'resolved',val:s.resolved_hosts??0},
+    {key:'http',label:'alive',val:s.alive_services??0},
+    {key:'screenshots',label:'screenshots',val:s.screenshots??0},
+    {key:'ports',label:'ports',val:s.open_ports??0},
+    {key:'js',label:'js',val:s.js_endpoints??0},
+    {key:'historical',label:'historical',val:s.historical_urls??0},
+    {key:'endpoints',label:'crawled',val:s.crawled_endpoints??0},
+    {key:'dorks',label:'dorks',val:s.dork_findings??0},
   ];
-  let h='';for(const it of items)h+=`<div class="stat-card" style="--card-color:${it.color}" onclick="jumpTo('${it.key}')"><div class="stat-val">${it.val.toLocaleString()}</div><div class="stat-label">${it.label}</div></div>`;
+  let h='';
+  for(const it of items){
+    if(it.val>0) h+=`<div class="stat-item" onclick="jumpTo('${it.key}')"><span class="stat-val">${it.val.toLocaleString()}</span><span class="stat-label">${it.label}</span></div>`;
+  }
   document.getElementById('stats-grid').innerHTML=h;
 }
 
-function buildNav(){let h='';for(const s of SECTIONS)h+=`<button class="nav-btn" id="nav-${s.id}" onclick="showSection('${s.id}')">${s.label}<span class="nav-count" id="navcount-${s.id}"></span></button>`;document.getElementById('nav-bar').innerHTML=h}
+function buildNav(){
+  let h='';
+  for(const s of SECTIONS) h+=`<button class="nav-btn" id="nav-${s.id}" onclick="showSection('${s.id}')">${s.label}<span class="nav-count" id="navcount-${s.id}"></span></button>`;
+  document.getElementById('nav-bar').innerHTML=h;
+}
 
 function buildSections(){
   let h='';
   for(const s of SECTIONS){
-    h+=`<div class="section visible" id="sec-${s.id}"><div class="section-head" onclick="toggleSec('${s.id}')"><div class="section-title"><span class="sec-dot" style="background:${COLORS[s.id]||'var(--fg4)'}"></span>${s.label}<span class="sec-badge" id="badge-${s.id}">0</span></div><span class="sec-chevron">v</span></div><div class="section-body">`;
+    h+=`<div class="section visible" id="sec-${s.id}"><div class="section-head" onclick="toggleSec('${s.id}')"><span class="section-title">${s.label}<span class="sec-badge" id="badge-${s.id}"></span></span><span class="sec-chevron">▾</span></div><div class="section-body">`;
     if(s.tabs){
       h+=`<div class="sec-tabs">`;s.tabs.forEach((t,i)=>h+=`<button class="sec-tab ${i===0?'active':''}" data-sec="${s.id}" data-tab="${t.key}" onclick="switchSecTab('${s.id}','${t.key}')">${t.label}<span class="sec-tab-count" id="tc-${s.id}-${t.key}"></span></button>`);h+=`</div>`;
       s.tabs.forEach((t,i)=>{h+=`<div class="tab-pane ${i===0?'active':''}" id="tp-${s.id}-${t.key}"><div class="section-inner"><div class="sec-filter"><input type="text" placeholder="filter ${t.label}..." oninput="secFilter('${s.id}_${t.key}',this.value)"/></div><div id="data-${s.id}-${t.key}"><div class="loading"><div class="spinner"></div></div></div></div></div>`});
@@ -154,9 +158,9 @@ document.getElementById('lightbox').addEventListener('click',function(){this.cla
 function loadTextList(secKey,dataId,badgeId,filePath){
   return async function(){
     const text=await fetchText(filePath);const lines=parseLines(text);const badge=document.getElementById(badgeId);
-    if(badge)badge.textContent=lines.length.toLocaleString();
+    if(badge&&lines.length)badge.textContent=lines.length.toLocaleString();
     if(!lines.length){document.getElementById(dataId).innerHTML='<div class="empty">no data</div>';return 0}
-    const ctrl=makePaged(dataId,lines,(items,q,off)=>{let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>value</th></tr></thead><tbody>';items.forEach((it,i)=>h+=`<tr><td>${off+i+1}</td><td class="url-cell">${hilite(it,q)}</td></tr>`);return h+'</tbody></table></div>'},(it,q)=>it.toLowerCase().includes(q));
+    const ctrl=makePaged(dataId,lines,(items,q,off)=>{let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>value</th></tr></thead><tbody>';items.forEach((it)=>h+=`<tr><td class="url-cell">${hilite(it,q)}</td></tr>`);return h+'</tbody></table></div>'},(it,q)=>it.toLowerCase().includes(q));
     ctrl.render();filterHandlers[secKey]=v=>ctrl.filter(v);allCtrls.push({key:secKey,ctrl,items:lines});return lines.length;
   };
 }
@@ -167,21 +171,18 @@ function loadRawFile(secKey,dataId,badgeId,filePath){
     const lines=content.split('\n');
     if(badge)badge.textContent=lines.length.toLocaleString();
 
-    // Render with optional filtering + nmap syntax highlighting
     function renderRaw(filteredLines, query){
       let h='<div class="raw-output">';
       for(const line of filteredLines){
         let out=esc(line);
-        // Nmap syntax highlighting
-        out=out.replace(/^(Nmap scan report for .+)$/,'<span style="color:var(--yel);font-weight:600">$1</span>');
+        out=out.replace(/^(Nmap scan report for .+)$/,'<span style="color:var(--accent);font-weight:600">$1</span>');
         out=out.replace(/(\d+\/tcp\s+open)\b/g,'<span style="color:var(--grn)">$1</span>');
         out=out.replace(/(\d+\/tcp\s+closed)\b/g,'<span style="color:var(--red)">$1</span>');
-        out=out.replace(/(\d+\/tcp\s+filtered)\b/g,'<span style="color:var(--org)">$1</span>');
+        out=out.replace(/(\d+\/tcp\s+filtered)\b/g,'<span style="color:var(--accent)">$1</span>');
         out=out.replace(/(\d+\/udp\s+open)\b/g,'<span style="color:var(--grn)">$1</span>');
-        out=out.replace(/^(PORT\s+STATE\s+SERVICE.*)$/,'<span style="color:var(--fg4);font-weight:600">$1</span>');
-        out=out.replace(/^(Host is up.*)$/,'<span style="color:var(--aqa)">$1</span>');
-        out=out.replace(/^(\|.*)$/,'<span style="color:var(--blu)">$1</span>');
-        // Highlight search matches
+        out=out.replace(/^(PORT\s+STATE\s+SERVICE.*)$/,'<span style="color:var(--fg3);font-weight:600">$1</span>');
+        out=out.replace(/^(Host is up.*)$/,'<span style="color:var(--blu)">$1</span>');
+        out=out.replace(/^(\|.*)$/,'<span style="color:var(--fg3)">$1</span>');
         if(query){const re=new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'gi');out=out.replace(re,'<span class="hl">$1</span>')}
         h+=out+'\n';
       }
@@ -202,11 +203,12 @@ function loadRawFile(secKey,dataId,badgeId,filePath){
 async function loadHTTP(){
   const text=await fetchText(T('httpx/results.json'));if(!text){document.getElementById('data-http').innerHTML='<div class="empty">no httpx data</div>';return}
   const recs=[];for(const l of parseLines(text)){try{recs.push(JSON.parse(l))}catch{}}
-  document.getElementById('badge-http').textContent=recs.length.toLocaleString();
+  const badge=document.getElementById('badge-http');
+  if(badge&&recs.length)badge.textContent=recs.length.toLocaleString();
   if(!recs.length){document.getElementById('data-http').innerHTML='<div class="empty">no data</div>';return}
   const ctrl=makePaged('data-http',recs,(items,q,off)=>{
-    let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>url</th><th>status</th><th>title</th><th>server</th><th>tech</th><th>ip</th></tr></thead><tbody>';
-    items.forEach((r,i)=>{const tech=(r.tech||[]).join(', '),ip=(r.a||[]).join(', ');h+=`<tr><td>${off+i+1}</td><td class="url-cell">${hilite(r.url||'',q)}</td><td>${sBadge(r.status_code)}</td><td class="url-cell">${hilite(r.title||'',q)}</td><td>${hilite(r.webserver||'',q)}</td><td style="color:var(--pur);font-size:.7rem">${hilite(tech,q)}</td><td style="color:var(--fg4)">${hilite(ip,q)}</td></tr>`});
+    let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>url</th><th>status</th><th>title</th><th>server</th><th>tech</th><th>ip</th></tr></thead><tbody>';
+    items.forEach((r)=>{const tech=(r.tech||[]).join(', '),ip=(r.a||[]).join(', ');h+=`<tr><td class="url-cell">${hilite(r.url||'',q)}</td><td>${sBadge(r.status_code)}</td><td class="url-cell">${hilite(r.title||'',q)}</td><td>${hilite(r.webserver||'',q)}</td><td style="color:var(--fg3);font-size:11px">${hilite(tech,q)}</td><td style="color:var(--fg4)">${hilite(ip,q)}</td></tr>`});
     return h+'</tbody></table></div>';
   },(r,q)=>[r.url,r.title,r.webserver,(r.tech||[]).join(' '),(r.a||[]).join(' ')].join(' ').toLowerCase().includes(q));
   ctrl.render();filterHandlers['http']=v=>ctrl.filter(v);allCtrls.push({key:'http',ctrl,items:recs.map(r=>JSON.stringify(r))});
@@ -214,7 +216,8 @@ async function loadHTTP(){
 
 async function loadScreenshots(){
   const data=await fetchJSON(`/api/screenshots?target=${currentTarget}`);const files=data?.files||[];
-  document.getElementById('badge-screenshots').textContent=files.length.toLocaleString();
+  const badge=document.getElementById('badge-screenshots');
+  if(badge&&files.length)badge.textContent=files.length.toLocaleString();
   if(!files.length){document.getElementById('data-screenshots').innerHTML='<div class="empty">no screenshots</div>';return}
   let h='<div class="ss-grid">';
   for(const f of files){const src=`/screenshots/${currentTarget}/${encodeURIComponent(f)}`;const label=f.replace(/\.(png|jpg|jpeg)$/i,'');h+=`<div class="ss-card" onclick="openLightbox('${src}','${esc(label)}')"><img src="${src}" alt="${esc(label)}" loading="lazy"/><div class="ss-name">${esc(label)}</div></div>`}
@@ -223,11 +226,12 @@ async function loadScreenshots(){
 
 async function loadNaabuTable(){
   const text=await fetchText(T('ports/naabu.txt'));const lines=parseLines(text);
-  document.getElementById('badge-ports').textContent=lines.length.toLocaleString();
+  const badge=document.getElementById('badge-ports');
+  if(badge&&lines.length)badge.textContent=lines.length.toLocaleString();
   if(!lines.length){document.getElementById('data-ports-naabu').innerHTML='<div class="empty">no naabu data</div>';return 0}
   const ctrl=makePaged('data-ports-naabu',lines,(items,q,off)=>{
-    let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>#</th><th>host</th><th>port</th></tr></thead><tbody>';
-    items.forEach((it,i)=>{const[host,port]=it.includes(':')?it.split(':'):[it,''];h+=`<tr><td>${off+i+1}</td><td>${hilite(host,q)}</td><td style="color:var(--org);font-weight:600">${hilite(port,q)}</td></tr>`});
+    let h='<div class="tbl-wrap"><table class="tbl"><thead><tr><th>host</th><th>port</th></tr></thead><tbody>';
+    items.forEach((it)=>{const[host,port]=it.includes(':')?it.split(':'):[it,''];h+=`<tr><td>${hilite(host,q)}</td><td style="color:var(--accent);font-weight:600">${hilite(port,q)}</td></tr>`});
     return h+'</tbody></table></div>';
   },(it,q)=>it.toLowerCase().includes(q));
   ctrl.render();filterHandlers['ports_naabu']=v=>ctrl.filter(v);allCtrls.push({key:'ports_naabu',ctrl,items:lines});return lines.length;
@@ -235,7 +239,9 @@ async function loadNaabuTable(){
 
 async function loadInfraIPs(){
   const text=await fetchText(T('infra/ip_groups.txt'));const orgText=await fetchText(T('infra/ip_orgs.txt'));
-  const lines=parseLines(text);document.getElementById('badge-infra').textContent=lines.length.toLocaleString();
+  const lines=parseLines(text);
+  const badge=document.getElementById('badge-infra');
+  if(badge&&lines.length)badge.textContent=lines.length.toLocaleString();
   const orgs={};parseLines(orgText).forEach(l=>{const m=l.match(/^(\S+)\s*=>\s*(.+)$/);if(m)orgs[m[1]]=m[2].trim()});
   if(!lines.length){document.getElementById('data-infra-ips').innerHTML='<div class="empty">no infra data</div>';return}
   const entries=lines.map(l=>{const m=l.match(/^(\S+)\s*=>\s*(.+)$/);return m?{ip:m[1],hosts:m[2].split(',').map(h=>h.trim()).filter(Boolean),org:orgs[m[1]]||''}:null}).filter(Boolean);
@@ -265,7 +271,7 @@ window.openTarget=async function(name){
   if(stats){document.getElementById('m-domain').textContent=stats.domain||name;document.getElementById('m-date').textContent=stats.scan_date?new Date(stats.scan_date).toLocaleDateString():'--';buildStats(stats)}
   const s=stats?.statistics||{};
   const navCounts={subdomains:s.total_subdomains,dns:s.resolved_hosts,http:s.alive_services,screenshots:s.screenshots,ports:s.open_ports,js:s.js_endpoints,historical:s.historical_urls,endpoints:s.crawled_endpoints,dorks:s.dork_findings};
-  for(const[k,v]of Object.entries(navCounts)){const el=document.getElementById('navcount-'+k);if(el&&v!==undefined)el.textContent='('+v+')'}
+  for(const[k,v]of Object.entries(navCounts)){const el=document.getElementById('navcount-'+k);if(el&&v)el.textContent='('+v+')'}
 
   await Promise.all([
     loadTextList('subdomains','data-subdomains','badge-subdomains',T('subs/all.txt'))(),
@@ -371,11 +377,9 @@ async function loadMonitor(){
   const badge=document.getElementById('badge-monitor');
   const navCount=document.getElementById('navcount-monitor');
 
-  // Update badge with total change records
-  if(badge)badge.textContent=changes.length.toLocaleString();
-  if(navCount)navCount.textContent='('+changes.length+')';
+  if(badge&&changes.length)badge.textContent=changes.length.toLocaleString();
+  if(navCount&&changes.length)navCount.textContent='('+changes.length+')';
 
-  // Check for recent changes (< 24h) for pulse dot in nav
   const hasRecent=changes.some(c=>{
     if(!c.timestamp)return false;
     const diff=Date.now()-new Date(c.timestamp).getTime();
@@ -387,32 +391,29 @@ async function loadMonitor(){
   }
 
   if(!changes.length){
-    el.innerHTML='<div class="monitor-empty"><p>no monitor data yet</p><p>run: ./monitor.sh -d '+esc(currentTarget)+' --init</p></div>';
+    el.innerHTML='<div class="monitor-empty"><p>no monitor data</p><p>run: ./monitor.sh -d '+esc(currentTarget)+' --init</p></div>';
     return;
   }
 
-  // Monitor summary bar
   const status=await fetchJSON(`/api/monitor/status?target=${currentTarget}`);
   let h='<div class="monitor-summary">';
-  h+=`<div class="ms-card"><div class="ms-val">${status?.baseline_subdomains??'--'}</div><div class="ms-label">baseline subs</div></div>`;
-  h+=`<div class="ms-card"><div class="ms-val">${status?.baseline_ports??'--'}</div><div class="ms-label">baseline ports</div></div>`;
-  h+=`<div class="ms-card"><div class="ms-val">${changes.length}</div><div class="ms-label">checks</div></div>`;
+  h+=`<div class="ms-item"><div class="ms-val">${status?.baseline_subdomains??'--'}</div><div class="ms-label">baseline subs</div></div>`;
+  h+=`<div class="ms-item"><div class="ms-val">${status?.baseline_ports??'--'}</div><div class="ms-label">baseline ports</div></div>`;
+  h+=`<div class="ms-item"><div class="ms-val">${changes.length}</div><div class="ms-label">checks</div></div>`;
   if(status?.last_check){
     const d=new Date(status.last_check*1000);
-    h+=`<div class="ms-card"><div class="ms-val" style="font-size:.85rem">${d.toLocaleDateString()}</div><div class="ms-label">last check</div></div>`;
+    h+=`<div class="ms-item"><div class="ms-val" style="font-size:13px">${d.toLocaleDateString()}</div><div class="ms-label">last check</div></div>`;
   }
   h+='</div>';
 
-  // Timeline
   h+='<div class="monitor-timeline">';
   for(const c of changes){
     const eid=_monitorEntryId++;
     const s=c.summary||{};
     const total=s.total_changes||0;
-    const cls=total>0?'has-changes':'no-changes';
     const date=c.timestamp?new Date(c.timestamp).toLocaleString():(c._filename||'');
 
-    h+=`<div class="monitor-entry ${cls}">`;
+    h+=`<div class="monitor-entry">`;
     h+=`<div class="me-time">${esc(date)}</div>`;
     h+=`<div class="me-badges">`;
     if(s.subdomains_added>0)h+=`<span class="me-badge add">+${s.subdomains_added} subs</span>`;
@@ -422,24 +423,23 @@ async function loadMonitor(){
     if(total===0)h+=`<span class="me-badge neutral">no changes</span>`;
     h+=`</div>`;
 
-    // Expandable details
     if(total>0){
-      h+=`<button class="me-toggle" onclick="document.getElementById('med-${eid}').classList.toggle('open')">details v</button>`;
+      h+=`<button class="me-toggle" onclick="document.getElementById('med-${eid}').classList.toggle('open')">details ▾</button>`;
       h+=`<div class="me-details" id="med-${eid}">`;
       if(c.new_subdomains?.length){
-        h+=`<div style="color:var(--fg4);margin-bottom:.2rem">New subdomains:</div>`;
+        h+=`<div style="color:var(--fg4);margin-bottom:2px">new subdomains:</div>`;
         for(const sub of c.new_subdomains)h+=`<div class="me-detail-item add">+ ${esc(sub)}</div>`;
       }
       if(c.removed_subdomains?.length){
-        h+=`<div style="color:var(--fg4);margin:.3rem 0 .2rem">Removed subdomains:</div>`;
+        h+=`<div style="color:var(--fg4);margin:4px 0 2px">removed subdomains:</div>`;
         for(const sub of c.removed_subdomains)h+=`<div class="me-detail-item rem">- ${esc(sub)}</div>`;
       }
       if(c.new_ports?.length){
-        h+=`<div style="color:var(--fg4);margin:.3rem 0 .2rem">New ports:</div>`;
+        h+=`<div style="color:var(--fg4);margin:4px 0 2px">new ports:</div>`;
         for(const p of c.new_ports)h+=`<div class="me-detail-item add">+ ${esc(p)}</div>`;
       }
       if(c.removed_ports?.length){
-        h+=`<div style="color:var(--fg4);margin:.3rem 0 .2rem">Removed ports:</div>`;
+        h+=`<div style="color:var(--fg4);margin:4px 0 2px">removed ports:</div>`;
         for(const p of c.removed_ports)h+=`<div class="me-detail-item rem">- ${esc(p)}</div>`;
       }
       h+=`</div>`;
@@ -455,7 +455,7 @@ window.toggleMonitor=async function(target,enabled){
   await postJSON('/api/monitor/toggle',{target,enabled});
 };
 
-// ── Monitor modal (replaces prompt()) ──
+// ── Monitor modal ──
 window.openMonitorModal=function(){document.getElementById('monitor-modal').classList.add('open')};
 window.closeMonitorModal=function(){document.getElementById('monitor-modal').classList.remove('open')};
 window.submitMonitorModal=async function(){
@@ -464,7 +464,7 @@ window.submitMonitorModal=async function(){
   closeMonitorModal();
   const hasBaseline=await fetchJSON(`/api/monitor/status?target=${domain}`);
   const init=!(hasBaseline?.has_baselines);
-  const res=await postJSON('/api/monitor/start',{domain,init});
+  const res=await postJSON('/api/monitor/start',{domain,target:domain,init});
   if(res?.ok){
     openScanModal();
     document.getElementById('scan-log').classList.add('visible');
@@ -474,15 +474,13 @@ window.submitMonitorModal=async function(){
 
 window.runMonitorScan=async function(){
   if(!currentTarget){
-    // In explorer view, open themed modal
     openMonitorModal();
     return;
   }
-  // In target view, use current target directly
   const domain=document.getElementById('m-domain')?.textContent||currentTarget;
   const hasBaseline=await fetchJSON(`/api/monitor/status?target=${currentTarget}`);
   const init=!(hasBaseline?.has_baselines);
-  const res=await postJSON('/api/monitor/start',{domain,init});
+  const res=await postJSON('/api/monitor/start',{domain,target:currentTarget,init});
   if(res?.ok){
     openScanModal();
     document.getElementById('scan-log').classList.add('visible');

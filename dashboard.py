@@ -530,6 +530,7 @@ def make_handler(projects_dir, scan_manager):
             if path == "/api/monitor/start":
                 body = self.read_body()
                 domain = body.get("domain", "").strip()
+                target = body.get("target", "").strip()
                 if not domain:
                     self.send_json({"error": "domain is required"}, 400)
                     return
@@ -538,7 +539,9 @@ def make_handler(projects_dir, scan_manager):
                 rate = body.get("rate")
                 top_ports = body.get("top_ports")
 
-                target_dir = projects_path / domain
+                # Use target dir name if provided, otherwise fall back to domain
+                target_name = target or domain
+                target_dir = projects_path / target_name
                 cmd = ["bash", str(MONITOR_SCRIPT), "-d", domain, "-o", str(target_dir)]
                 if init:
                     cmd.append("--init")
