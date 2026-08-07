@@ -193,3 +193,85 @@ notify_monitor_changes() {
     step "Sending Discord notification for $domain"
     discord_send "$payload"
 }
+
+# ── Build and send scan-complete alert ────────────────────────────────────────
+
+notify_scan_complete() {
+    local domain="$1"
+    local output_dir="$2"
+
+    load_notify_config
+
+    if [[ -z "$DISCORD_WEBHOOK_URL" ]]; then
+        info "No DISCORD_WEBHOOK_URL configured. Skipping scan-complete notification."
+        return 0
+    fi
+
+    local summary_file="$output_dir/reports/summary.json"
+    if [[ ! -f "$summary_file" ]]; then
+        warn "Summary JSON not found at $summary_file. Skipping notification."
+        return 1
+    fi
+
+    # Parse stats from summary.json
+    local total_subs resolved alive ports js_endpoints historical crawled dork_findings validated_urls
+    total_subs=$(jq -r '.statistics.total_subdomains // 0' "$summary_file" 2>/dev/null)
+    resolved=$(jq -r '.statistics.resolved_hosts // 0' "$summary_file" 2>/dev/null)
+    alive=$(jq -r '.statistics.alive_services // 0' "$summary_file" 2>/dev/null)
+    ports=$(jq -r '.statistics.open_ports // 0' "$summary_file" 2>/dev/null)
+    js_endpoints=$(jq -r '.statistics.js_endpoints // 0' "$summary_file" 2>/dev/null)
+    historical=$(jq -r '.statistics.historical_urls // 0' "$summary_file" 2>/dev/null)
+    crawled=$(jq -r '.statistics.crawled_endpoints // 0' "$summary_file" 2>/dev/null)
+    dork_findings=$(jq -r '.statistics.dork_findings // 0' "$summary_file" 2>/dev/null)
+
+    # Count validated results if available
+    local validated_file="$output_dir/historical/validated_interesting.json"
+    if [[ -f "$validated_file" ]]; then
+        validated_urls=$(wc -l < "$validated_file" 2>/dev/null | tr -d ' ')
+    else
+        validated_urls=0
+    fi
+
+    local timestamp
+    timestamp=$(date -Iseconds 2>/dev/null || date +"%Y-%m-%dT%H:%M:%S")
+
+    # Build the Discord embed payload
+    local payload
+    payload=$(jq -n \
+        --arg title "✅ Scan Complete — $domain" \
+        --arg desc "Full reconnaissance scan finished for \`$domain\`" \
+        --argjson color 5763719 \
+        --arg ts "$timestamp" \
+        --arg subs "$total_subs" \
+        --arg resolved "$resolved" \
+        --arg alive "$alive" \
+        --arg ports "$ports" \
+        --arg js "$js_endpoints" \
+        --arg hist "$historical" \
+        --arg crawled "$crawled" \
+        --arg dorks "$dork_findings" \
+        --arg validated "$validated_urls" \
+        '{
+            embeds: [{
+                title: $title,
+                description: $desc,
+                color: $color,
+                fields: [
+                    {name: "Subdomains", value: $subs, inline: true},
+                    {name: "Resolved", value: $resolved, inline: true},
+                    {name: "Alive", value: $alive, inline: true},
+                    {name: "Open Ports", value: $ports, inline: true},
+                    {name: "JS Endpoints", value: $js, inline: true},
+                    {name: "Historical URLs", value: $hist, inline: true},
+                    {name: "Crawled", value: $crawled, inline: true},
+                    {name: "Dork Findings", value: $dorks, inline: true},
+                    {name: "Validated URLs", value: $validated, inline: true}
+                ],
+                footer: {text: "Recon Engine"},
+                timestamp: $ts
+            }]
+        }')
+
+    step "Sending scan-complete notification for $domain"
+    discord_send "$payload"
+}

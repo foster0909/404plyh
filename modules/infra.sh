@@ -16,7 +16,7 @@ module_infra_mapping() {
     # ── amass intel ──
     if require_tool "amass"; then
         run_safe "amass intel" \
-            "amass intel -d '$DOMAIN' -whois -o '$infra_dir/amass_intel.txt' 2>>'$LOG_FILE'"
+            "timeout 180 amass intel -d '$DOMAIN' -whois -o '$infra_dir/amass_intel.txt' 2>>'$LOG_FILE'"
         report_count "$infra_dir/amass_intel.txt" "amass intel results"
     fi
 

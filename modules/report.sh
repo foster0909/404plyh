@@ -23,6 +23,9 @@ module_report() {
     js_endpoints=$(count "$OUTPUT_DIR/js/endpoints.txt")
     historical=$(count "$OUTPUT_DIR/historical/all_urls.txt")
     crawled=$(count "$OUTPUT_DIR/endpoints/all.txt")
+    local dork_findings historical_validated
+    dork_findings=$(count "$OUTPUT_DIR/dorks/all_findings.txt")
+    historical_validated=$(count "$OUTPUT_DIR/historical/validated_interesting.json")
 
     # ── Text summary ──
     step "Generating text summary"
@@ -47,6 +50,8 @@ module_report() {
         echo "  JS Endpoints Extracted:    $js_endpoints"
         echo "  Historical URLs Found:     $historical"
         echo "  Crawled Endpoints:         $crawled"
+        echo "  Dork Findings:             $dork_findings"
+        echo "  Historical Validated:      $historical_validated"
         echo ""
         echo "───────────────────────────────────────────────────────────────"
         echo "  KEY FILES"
@@ -85,7 +90,9 @@ module_report() {
     "open_ports": $ports,
     "js_endpoints": $js_endpoints,
     "historical_urls": $historical,
-    "crawled_endpoints": $crawled
+    "crawled_endpoints": $crawled,
+    "dork_findings": $dork_findings,
+    "historical_validated": $historical_validated
   },
   "key_files": {
     "subdomains": "subs/all.txt",

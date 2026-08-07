@@ -3,319 +3,1745 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>404Plyh — Recon Engine</title>
+<title>404Plyh — Recon Triage Dashboard</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{
-  --bg:#0a0a0a;--bg1:#111111;--bg2:#1a1a1a;--border:#222222;--border-h:#333333;
-  --fg:#e0e0e0;--fg2:#aaaaaa;--fg3:#666666;--fg4:#444444;
-  --accent:#f59e0b;--red:#ef4444;--grn:#22c55e;--blu:#60a5fa;
-  --fm:'JetBrains Mono',monospace;--r:2px;--tr:0.15s ease
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
-body{font-family:var(--fm);background:var(--bg);color:var(--fg);line-height:1.6;min-height:100vh;font-size:13px}
-.container{max-width:1400px;margin:0 auto;padding:0 1.5rem}
-.hide{display:none!important}
 
-/* ── Header ── */
-.header{padding:1.25rem 0;border-bottom:1px solid var(--border);margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem}
-.logo{font-size:14px;font-weight:700;color:var(--fg);letter-spacing:-.02em}
-.logo span{color:var(--fg3);font-weight:400}
-.header-actions{display:flex;gap:.5rem;align-items:center}
-.btn{background:var(--bg2);border:1px solid var(--border);color:var(--fg2);padding:6px 14px;border-radius:var(--r);font-size:12px;font-family:var(--fm);cursor:pointer;transition:var(--tr);text-transform:lowercase}
-.btn:hover{border-color:var(--border-h);color:var(--fg)}
-.btn-primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
-.btn-primary:hover{background:#ffffff}
-.btn-danger{border-color:var(--red);color:var(--red)}
-.btn-danger:hover{background:var(--red);color:var(--bg)}
-.btn-sm{padding:4px 10px;font-size:11px}
-.back-btn{cursor:pointer;color:var(--fg3);font-size:12px;background:none;border:none;font-family:var(--fm);transition:var(--tr)}
-.back-btn:hover{color:var(--fg)}
-.meta{display:flex;gap:1.5rem;flex-wrap:wrap;font-size:12px}
-.meta-item{display:flex;gap:.35rem}
-.meta-label{color:var(--fg3)}
-.meta-val{color:var(--fg);font-weight:500}
-
-/* ── Explorer ── */
-.search-bar{position:relative;margin-bottom:1.25rem}
-.search-bar input{width:100%;background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px 10px 32px;color:var(--fg);font-size:13px;font-family:var(--fm);outline:none;transition:var(--tr)}
-.search-bar input:focus{border-color:var(--fg3)}
-.search-bar input::placeholder{color:var(--fg4)}
-.search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--fg4);font-size:13px;pointer-events:none}
-.search-count{position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--fg3)}
-
-.target-list{display:flex;flex-direction:column;gap:1px}
-.target-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:1rem;padding:12px 16px;background:var(--bg1);cursor:pointer;transition:var(--tr);border-left:2px solid transparent}
-.target-row:hover{background:var(--bg2);border-left-color:var(--fg3)}
-.target-row:first-child{border-radius:var(--r) var(--r) 0 0}
-.target-row:last-child{border-radius:0 0 var(--r) var(--r)}
-.tr-left{display:flex;align-items:baseline;gap:1rem;min-width:0}
-.tr-domain{font-weight:600;font-size:14px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tr-stats{display:flex;gap:1rem;font-size:11px;color:var(--fg3);flex-shrink:0;white-space:nowrap}
-.tr-stats span b{color:var(--fg2);margin-right:2px}
-.tr-right{display:flex;align-items:center;gap:.75rem;flex-shrink:0}
-.tr-date{font-size:11px;color:var(--fg4)}
-.monitor-sw{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--fg4);text-transform:uppercase;letter-spacing:.04em}
-.toggle-sw{position:relative;display:inline-block;width:28px;height:16px;flex-shrink:0}
-.toggle-sw input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;cursor:pointer;inset:0;background:var(--border);border-radius:8px;transition:var(--tr)}
-.toggle-slider::before{content:'';position:absolute;width:12px;height:12px;left:2px;bottom:2px;background:var(--fg4);border-radius:50%;transition:var(--tr)}
-.toggle-sw input:checked+.toggle-slider{background:var(--grn)}
-.toggle-sw input:checked+.toggle-slider::before{transform:translateX(12px);background:var(--fg)}
-
-.empty-state{text-align:center;padding:4rem 1rem;color:var(--fg4)}
-.empty-state p{margin-top:.5rem;font-size:12px}
-
-/* ── Scan status bar ── */
-.scan-status-bar{display:none;align-items:center;gap:.6rem;padding:8px 14px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:1rem;font-size:12px}
-.scan-status-bar.visible{display:flex}
-.scan-status-bar .spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--fg);border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
-
-/* ── Nav bar ── */
-.nav{display:flex;gap:0;overflow-x:auto;border-bottom:1px solid var(--border);margin-bottom:1.25rem;scrollbar-width:none}
-.nav::-webkit-scrollbar{height:0}
-.nav-btn{background:none;border:none;padding:8px 16px;color:var(--fg3);font-size:12px;font-family:var(--fm);cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:var(--tr)}
-.nav-btn:hover{color:var(--fg2)}
-.nav-btn.active{color:var(--fg);border-bottom-color:var(--fg)}
-.nav-count{font-size:10px;color:var(--fg4);margin-left:4px}
-
-/* ── Stat summary (inline, not cards) ── */
-.stat-bar{display:flex;flex-wrap:wrap;gap:1.5rem;padding:12px 0;margin-bottom:1rem;border-bottom:1px solid var(--border);font-size:12px}
-.stat-item{display:flex;align-items:baseline;gap:6px;cursor:pointer;transition:var(--tr)}
-.stat-item:hover{color:var(--fg)}
-.stat-item .stat-val{font-size:18px;font-weight:700;color:var(--fg)}
-.stat-item .stat-label{color:var(--fg3);text-transform:lowercase}
-
-/* ── Sections ── */
-.section{margin-bottom:2px;background:var(--bg1);display:none}
-.section.visible{display:block}
-.section-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;cursor:pointer;user-select:none;transition:var(--tr);border-bottom:1px solid transparent}
-.section-head:hover{background:var(--bg2)}
-.section.open .section-head{border-bottom-color:var(--border)}
-.section-title{font-weight:600;font-size:11px;color:var(--fg3);text-transform:uppercase;letter-spacing:.06em}
-.sec-badge{color:var(--fg4);font-size:11px;margin-left:8px;font-weight:400}
-.sec-chevron{color:var(--fg4);font-size:11px;transition:transform .2s ease}
-.section.open .sec-chevron{transform:rotate(180deg)}
-.section-body{max-height:0;overflow:hidden;transition:max-height .3s ease}
-.section.open .section-body{max-height:100000px}
-.section-inner{padding:16px}
-
-/* ── Tabs within sections ── */
-.sec-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;overflow-x:auto;scrollbar-width:none}
-.sec-tabs::-webkit-scrollbar{height:0}
-.sec-tab{background:none;border:none;padding:8px 12px;color:var(--fg4);font-size:11px;font-family:var(--fm);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:var(--tr)}
-.sec-tab:hover{color:var(--fg2)}
-.sec-tab.active{color:var(--fg);border-bottom-color:var(--fg)}
-.sec-tab-count{color:var(--fg4);margin-left:4px}
-.tab-pane{display:none}.tab-pane.active{display:block}
-
-/* ── Filter inputs ── */
-.sec-filter{margin-bottom:10px}
-.sec-filter input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;color:var(--fg);font-size:12px;font-family:var(--fm);outline:none;transition:var(--tr)}
-.sec-filter input:focus{border-color:var(--fg3)}
-.sec-filter input::placeholder{color:var(--fg4)}
-
-/* ── Tables ── */
-.tbl-wrap{overflow-x:auto;max-height:600px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r)}
-.tbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:auto}
-.tbl thead{position:sticky;top:0;z-index:2}
-.tbl th{background:var(--bg2);color:var(--fg3);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
-.tbl td{padding:6px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--fg2);white-space:nowrap}
-.tbl td.url-cell{max-width:600px;overflow:hidden;text-overflow:ellipsis;position:relative}
-.tbl td.url-cell:hover{overflow:visible;white-space:normal;word-break:break-all;background:var(--bg2);z-index:1}
-.tbl tbody tr{transition:background .1s}
-.tbl tbody tr:nth-child(even){background:rgba(255,255,255,.015)}
-.tbl tbody tr:hover{background:var(--bg2)}
-.hl{background:rgba(245,158,11,.15);color:var(--accent);padding:0 1px;border-radius:1px}
-.badge{display:inline-block;padding:2px 8px;border-radius:var(--r);font-size:11px;font-weight:600}
-.b-2xx{background:rgba(34,197,94,.1);color:var(--grn)}
-.b-3xx{background:rgba(96,165,250,.1);color:var(--blu)}
-.b-4xx{background:rgba(245,158,11,.1);color:var(--accent)}
-.b-5xx{background:rgba(239,68,68,.1);color:var(--red)}
-.b-na{color:var(--fg4)}
-
-/* ── Raw output ── */
-.raw-output{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:12px 16px;font-size:11px;color:var(--fg3);line-height:1.6;white-space:pre;overflow-x:auto;max-height:600px;overflow-y:auto}
-
-/* ── Screenshots ── */
-.ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
-.ss-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:var(--tr)}
-.ss-card:hover{border-color:var(--fg4)}
-.ss-card img{width:100%;height:180px;object-fit:cover;display:block}
-.ss-name{padding:6px 10px;font-size:11px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-top:1px solid var(--border)}
-
-/* ── Lightbox ── */
-.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:1000;justify-content:center;align-items:center;cursor:pointer}
-.lightbox.open{display:flex}
-.lightbox img{max-width:92vw;max-height:88vh;border-radius:var(--r)}
-.lb-label{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg1);border:1px solid var(--border);padding:6px 16px;border-radius:var(--r);font-size:12px;color:var(--fg)}
-
-/* ── Infra cards ── */
-.infra-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
-.infra-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px}
-.infra-ip{font-weight:600;color:var(--fg);font-size:13px;margin-bottom:4px}
-.infra-org{color:var(--fg3);font-size:11px;margin-bottom:6px}
-.infra-hosts{display:flex;flex-wrap:wrap;gap:4px}
-.infra-tag{background:var(--bg2);color:var(--fg3);font-size:10px;padding:2px 8px;border-radius:var(--r)}
-
-/* ── Pagination ── */
-.paging{display:flex;align-items:center;justify-content:space-between;padding:8px 0 0;border-top:1px solid var(--border);margin-top:8px}
-.paging-info{font-size:11px;color:var(--fg4)}
-.paging-btns{display:flex;gap:3px}
-.pg-btn{background:var(--bg);border:1px solid var(--border);color:var(--fg3);padding:4px 10px;border-radius:var(--r);font-size:11px;cursor:pointer;transition:var(--tr);font-family:var(--fm)}
-.pg-btn:hover:not(:disabled){border-color:var(--fg3);color:var(--fg)}
-.pg-btn:disabled{opacity:.25;cursor:not-allowed}
-.pg-btn.active{background:var(--fg);color:var(--bg);border-color:var(--fg)}
-
-/* ── Monitor ── */
-.monitor-timeline{padding:0}
-.monitor-entry{padding:10px 16px;border-bottom:1px solid var(--border);transition:var(--tr)}
-.monitor-entry:hover{background:var(--bg2)}
-.monitor-entry:last-child{border-bottom:none}
-.me-time{font-size:11px;color:var(--fg4);margin-bottom:4px}
-.me-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
-.me-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:var(--r);font-size:11px;font-weight:600}
-.me-badge.add{background:rgba(34,197,94,.1);color:var(--grn)}
-.me-badge.rem{background:rgba(239,68,68,.1);color:var(--red)}
-.me-badge.neutral{color:var(--fg4)}
-.me-details{display:none;margin-top:6px;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-size:11px;color:var(--fg3);line-height:1.6}
-.me-details.open{display:block}
-.me-detail-item{padding:1px 0}
-.me-detail-item.add{color:var(--grn)}
-.me-detail-item.rem{color:var(--red);text-decoration:line-through;opacity:.7}
-.me-toggle{background:none;border:none;color:var(--fg4);font-size:11px;font-family:var(--fm);cursor:pointer;padding:0;transition:var(--tr)}
-.me-toggle:hover{color:var(--fg)}
-.monitor-empty{text-align:center;padding:2rem 1rem;color:var(--fg4);font-size:12px}
-.monitor-empty p{margin-top:.5rem;font-size:11px}
-.monitor-summary{display:flex;gap:2rem;padding:12px 0;margin-bottom:12px;border-bottom:1px solid var(--border);font-size:12px}
-.ms-item .ms-val{font-size:16px;font-weight:700;color:var(--fg)}
-.ms-item .ms-label{font-size:10px;color:var(--fg4);text-transform:uppercase;letter-spacing:.04em}
-.pulse-dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--grn);margin-left:4px;animation:pulse 1.5s ease-in-out infinite}
-
-/* ── Modal ── */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;justify-content:center;align-items:flex-start;padding-top:8vh}
-.modal-overlay.open{display:flex}
-.modal{background:var(--bg1);border:1px solid var(--border);border-radius:var(--r);width:540px;max-width:95vw;max-height:85vh;overflow-y:auto}
-.modal-head{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
-.modal-title{font-weight:600;font-size:12px;color:var(--fg);text-transform:uppercase;letter-spacing:.04em}
-.modal-close{background:none;border:none;color:var(--fg3);font-size:14px;cursor:pointer;font-family:var(--fm)}
-.modal-close:hover{color:var(--fg)}
-.modal-body{padding:16px}
-.form-group{margin-bottom:12px}
-.form-label{display:block;font-size:10px;color:var(--fg3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
-.form-input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;color:var(--fg);font-size:12px;font-family:var(--fm);outline:none;transition:var(--tr)}
-.form-input:focus{border-color:var(--fg3)}
-.modules-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.mod-toggle{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:var(--tr);font-size:11px;color:var(--fg3)}
-.mod-toggle:hover{border-color:var(--fg4)}
-.mod-toggle.active{border-color:var(--grn);color:var(--fg2)}
-.mod-toggle .dot{width:6px;height:6px;border-radius:50%;background:var(--fg4);transition:var(--tr);flex-shrink:0}
-.mod-toggle.active .dot{background:var(--grn)}
-.adv-toggle{font-size:11px;color:var(--fg4);cursor:pointer;background:none;border:none;font-family:var(--fm);margin-bottom:8px;transition:var(--tr)}
-.adv-toggle:hover{color:var(--fg2)}
-.adv-fields{display:none;gap:8px}.adv-fields.open{display:grid;grid-template-columns:1fr 1fr 1fr}
-.modal-footer{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
-.scan-log{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:10px 14px;font-size:11px;color:var(--fg3);max-height:300px;overflow-y:auto;white-space:pre-wrap;line-height:1.5;margin-top:12px;display:none}
-.scan-log.visible{display:block}
-
-.empty{text-align:center;padding:2rem 1rem;color:var(--fg4);font-size:12px}
-.loading{text-align:center;padding:1.5rem;color:var(--fg4)}
-.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--fg3);border-radius:50%;animation:spin .6s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-
-@media(max-width:768px){
-  .container{padding:0 .6rem}
-  .tr-stats{display:none}
-  .stat-bar{gap:1rem}
-  .stat-item .stat-val{font-size:14px}
+:root {
+  --bg: #0d1117;
+  --panel: #161b22;
+  --border: #21262d;
+  --border-h: #30363d;
+  --fg: #e6edf3;
+  --muted: #7d8590;
+  --accent: #c9a25a;
+  --danger: #da3633;
+  --good: #3fb950;
+  --blue: #58a6ff;
+  --warning: #d29922;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', -apple-system, sans-serif;
+  --r: 6px;
+  --tr: 0.15s ease;
 }
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--fg4);border-radius:2px}
-::-webkit-scrollbar-thumb:hover{background:var(--fg3)}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  min-height: 100vh;
+  display: flex;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+/* ── App Layout ── */
+.app-container {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.sidebar-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: #fff;
+  letter-spacing: -0.03em;
+}
+
+.logo span {
+  color: var(--accent);
+}
+
+.target-select-container {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn-back-explorer {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 12px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  transition: var(--tr);
+}
+
+.btn-back-explorer:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-h);
+}
+
+.nav-list {
+  list-style: none;
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex-grow: 1;
+}
+
+.nav-item button {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--muted);
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: var(--tr);
+}
+
+.nav-item button:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fg);
+}
+
+.nav-item.active button {
+  background: rgba(216, 166, 87, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-badge {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 400;
+}
+
+.nav-item.active .nav-badge {
+  background: rgba(216, 166, 87, 0.15);
+  color: var(--accent);
+}
+
+/* ── Main Panel ── */
+.main-panel {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ── Top Bar ── */
+.topbar {
+  height: 60px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--panel);
+}
+
+.topbar-title-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.topbar-title {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.topbar-meta {
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  gap: 1.5rem;
+}
+
+.topbar-meta span b {
+  color: var(--fg);
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ── Content Viewports ── */
+.content-area {
+  flex-grow: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  position: relative;
+}
+
+.view-section {
+  display: none;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.view-section.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Buttons ── */
+.btn {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 7px 14px;
+  border-radius: var(--r);
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  transition: var(--tr);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.btn:hover {
+  border-color: var(--border-h);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: #e6b76c;
+  border-color: #e6b76c;
+}
+
+.btn-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.btn-star {
+  color: var(--muted);
+}
+.btn-star.active {
+  color: var(--accent) !important;
+}
+
+.btn-ignore {
+  color: var(--muted);
+}
+.btn-ignore.active {
+  color: var(--danger) !important;
+  opacity: 0.5;
+}
+
+/* ── Explorer Target Screen (Full Screen Overlay-ish) ── */
+.explorer-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 100;
+  overflow-y: auto;
+  padding: 4rem 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.explorer-content {
+  width: 100%;
+  max-width: 900px;
+}
+
+.explorer-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.explorer-header h1 {
+  font-family: var(--font-mono);
+  font-size: 20px;
+}
+
+.explorer-header h1 span {
+  color: var(--accent);
+}
+
+/* ── Targets List Table ── */
+.targets-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.targets-table tr {
+  border-bottom: 1px solid var(--border);
+  transition: var(--tr);
+}
+
+.targets-table tr:hover {
+  background: var(--panel);
+}
+
+.targets-table td {
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+.target-name {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+}
+
+.target-name:hover {
+  color: var(--accent);
+}
+
+.target-stats-inline {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.target-stats-inline span b {
+  color: var(--fg);
+}
+
+/* ── General Elements & Grid Panels ── */
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.overview-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.overview-stat-box {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.25rem;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--tr);
+}
+
+.overview-stat-box:hover {
+  border-color: var(--border-h);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.overview-stat-val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.overview-stat-lbl {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.overview-stat-box::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border);
+}
+.overview-stat-box.has-data::before {
+  background: var(--accent);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel-title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Hunt Queue View ── */
+.triage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: var(--r);
+  margin-bottom: 1.5rem;
+}
+
+.triage-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.triage-search {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 6px 12px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  width: 220px;
+}
+
+.triage-search:focus {
+  border-color: var(--border-h);
+}
+
+/* ── Triage List ── */
+.triage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.triage-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.5rem;
+  transition: var(--tr);
+}
+
+.triage-row:hover {
+  border-color: var(--border-h);
+}
+
+.triage-priority {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--r);
+  text-transform: uppercase;
+  width: 64px;
+  text-align: center;
+}
+
+.triage-priority.high {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--danger);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+}
+
+.triage-priority.med {
+  background: rgba(242, 199, 68, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(242, 199, 68, 0.3);
+}
+
+.triage-priority.low {
+  background: rgba(141, 150, 160, 0.15);
+  color: var(--muted);
+  border: 1px solid rgba(141, 150, 160, 0.3);
+}
+
+.triage-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.triage-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.triage-host {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 14px;
+  color: #fff;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triage-host:hover {
+  color: var(--accent);
+}
+
+.triage-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.triage-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: var(--r);
+}
+
+.triage-badge.tech {
+  color: var(--blue);
+}
+
+.triage-badge.signal {
+  border-color: rgba(216, 166, 87, 0.3);
+  color: var(--accent);
+}
+
+.triage-meta-line {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triage-meta-line b {
+  color: var(--fg);
+}
+
+.triage-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* ── Section Tabs UX ── */
+.section-tabs-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.section-tabs-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.section-tab-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: var(--tr);
+}
+
+.section-tab-btn:hover {
+  color: var(--fg);
+}
+
+.section-tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Clean Table UX ── */
+.table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.custom-table th {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-table th:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.custom-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  font-family: var(--font-mono);
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.custom-table tr:last-child td {
+  border-bottom: none;
+}
+
+.custom-table tr:hover td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.custom-table td.wrap-cell {
+  white-space: normal;
+  word-break: break-all;
+  max-width: 450px;
+}
+
+/* Status Badges */
+.badge-status {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: var(--r);
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.badge-status.s2xx { background: rgba(126, 231, 135, 0.15); color: var(--good); }
+.badge-status.s3xx { background: rgba(88, 166, 255, 0.15); color: var(--blue); }
+.badge-status.s4xx { background: rgba(242, 199, 68, 0.15); color: var(--warning); }
+.badge-status.s5xx { background: rgba(255, 107, 107, 0.15); color: var(--danger); }
+.badge-status.s-na { background: rgba(255, 255, 255, 0.05); color: var(--muted); }
+
+/* Table Pagination Controls */
+.table-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.01);
+}
+
+/* ── Filter Toolbar (for lists/tables) ── */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.table-toolbar-left {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.table-toolbar-right {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.toolbar-input {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 5px 10px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+}
+
+.toolbar-input:focus {
+  border-color: var(--border-h);
+}
+
+.toolbar-select {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 5px 10px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+
+.toolbar-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── Raw Files View Layout ── */
+.raw-files-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+}
+
+.raw-files-list {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  max-height: 650px;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.raw-file-item {
+  padding: 8px 12px;
+  border-radius: var(--r);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  transition: var(--tr);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.raw-file-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--fg);
+}
+
+.raw-file-item.active {
+  background: rgba(216, 166, 87, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Screenshots Page ── */
+.ss-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.ss-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  cursor: pointer;
+  transition: var(--tr);
+}
+
+.ss-card:hover {
+  border-color: var(--border-h);
+}
+
+.ss-card img {
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  display: block;
+}
+
+.ss-footer {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── Lightbox Overlay ── */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.95);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+}
+
+.lightbox.open {
+  display: flex;
+}
+
+.lightbox img {
+  max-width: 90vw;
+  max-height: 85vh;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.lb-label {
+  position: absolute;
+  bottom: 24px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 6px 16px;
+  border-radius: var(--r);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+}
+
+/* ── Modal Dialogs ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 950;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 8vh;
+  overflow-y: auto;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  width: 550px;
+  max-width: 95vw;
+  margin-bottom: 2rem;
+}
+
+.modal-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  color: #fff;
+}
+
+.modal-body {
+  padding: 16px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.form-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--border-h);
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mod-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  transition: var(--tr);
+}
+
+.mod-toggle:hover {
+  border-color: var(--border-h);
+  color: var(--fg);
+}
+
+.mod-toggle.active {
+  border-color: var(--accent);
+  color: #fff;
+  background: rgba(216, 166, 87, 0.08);
+}
+
+.mod-toggle .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.mod-toggle.active .dot {
+  background: var(--accent);
+}
+
+.adv-toggle {
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  margin: 10px 0;
+  display: block;
+}
+
+.adv-toggle:hover {
+  color: var(--fg);
+}
+
+.adv-fields {
+  display: none;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.adv-fields.open {
+  display: grid;
+}
+
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.scan-log-console {
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+  max-height: 240px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  display: none;
+}
+
+.scan-log-console.visible {
+  display: block;
+}
+
+/* ── Scan Active Status Bar ── */
+.scan-status-bar {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(218, 166, 87, 0.05);
+  border: 1px solid var(--accent);
+  padding: 10px 16px;
+  border-radius: var(--r);
+  margin-bottom: 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.scan-status-bar.visible {
+  display: flex;
+}
+
+.scan-status-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.scan-status-info .spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-h);
+}
+
+.empty-placeholder {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* ── Raw View panel ── */
+.raw-view-panel {
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 1.5rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #fff;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 650px;
+  overflow-y: auto;
+}
+.hide { display: none !important; }
+
+/* ── Finding chips (icon-tagged severity items) ── */
+.triage-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.finding-chip {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 0;
+  border-left: 2px solid transparent;
+  padding-left: 8px;
+  line-height: 1.4;
+}
+
+.finding-icon {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.finding-link {
+  color: inherit;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.finding-link:hover {
+  text-decoration: underline;
+}
+
+/* Severity levels */
+.finding-chip.sev-crit {
+  border-left-color: var(--danger);
+  color: var(--fg);
+}
+.finding-chip.sev-crit .finding-icon {
+  background: rgba(218, 54, 51, 0.18);
+  color: var(--danger);
+}
+
+.finding-chip.sev-high {
+  border-left-color: var(--warning);
+  color: var(--fg);
+}
+.finding-chip.sev-high .finding-icon {
+  background: rgba(210, 153, 34, 0.18);
+  color: var(--warning);
+}
+
+.finding-chip.sev-med {
+  border-left-color: var(--blue);
+  color: var(--muted);
+}
+.finding-chip.sev-med .finding-icon {
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--blue);
+}
+
+.finding-chip.sev-low {
+  border-left-color: var(--border-h);
+  color: var(--muted);
+}
+.finding-chip.sev-low .finding-icon {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+/* Triage ignored row */
+.triage-row.triage-ignored {
+  opacity: 0.35;
+}
+
+/* Inline page title in triage header */
+.triage-page-title {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-sans);
+  margin-left: 4px;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 280px;
+}
+
+/* ── Overview asset cards ── */
+.overview-asset-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color var(--tr);
+}
+
+.overview-asset-card:hover {
+  border-color: var(--border-h);
+}
+
+.overview-asset-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.overview-asset-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 4px;
+}
+
+/* Count badges (crit/high summary) */
+.finding-count-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.finding-count-badge.sev-crit {
+  background: rgba(218, 54, 51, 0.15);
+  color: var(--danger);
+}
+
+.finding-count-badge.sev-high {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--warning);
+}
+
+.finding-more {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding-left: 8px;
+  margin-top: 2px;
+}
 </style>
 </head>
 <body>
-<div class="container">
-  <div class="header">
-    <div style="display:flex;align-items:center;gap:12px">
-      <button class="back-btn hide" id="back-btn" onclick="showExplorer()">&lt; back</button>
-      <div class="logo">404Plyh<span>::recon</span></div>
-    </div>
-    <div class="header-actions">
-      <div class="meta hide" id="target-meta">
-        <div class="meta-item"><span class="meta-label">target</span><span class="meta-val" id="m-domain">--</span></div>
-        <div class="meta-item"><span class="meta-label">scanned</span><span class="meta-val" id="m-date">--</span></div>
+
+  <!-- Full Explorer Screen -->
+  <div class="explorer-screen" id="explorer-screen">
+    <div class="explorer-content">
+      <div class="explorer-header">
+        <h1>404Plyh<span>::recon_triage</span></h1>
+        <button class="btn btn-primary" onclick="openScanModal()">new scan</button>
       </div>
-      <button class="btn btn-primary" id="new-scan-btn" onclick="openScanModal()">new scan</button>
-      <button class="btn" id="monitor-btn" onclick="runMonitorScan()">monitor</button>
-    </div>
-  </div>
 
-  <!-- Scan status bar -->
-  <div class="scan-status-bar" id="scan-bar">
-    <div class="spinner"></div>
-    <span id="scan-bar-text">scanning...</span>
-    <button class="btn btn-danger btn-sm" onclick="stopScan()">stop</button>
-    <button class="btn btn-sm" onclick="openScanLog()">log</button>
-  </div>
-
-  <!-- Explorer view -->
-  <div id="view-explorer">
-    <div class="search-bar"><span class="search-icon">/</span><input type="text" id="explorer-search" placeholder="search targets..." oninput="filterTargets(this.value)"/></div>
-    <div id="targets-container"></div>
-  </div>
-
-  <!-- Target dashboard view -->
-  <div id="view-target" class="hide">
-    <div class="search-bar"><span class="search-icon">/</span><input type="text" id="global-search" placeholder="search all data..."/><span class="search-count" id="search-count"></span></div>
-    <div class="stat-bar" id="stats-grid"></div>
-    <nav class="nav" id="nav-bar"></nav>
-    <div id="sections"></div>
-  </div>
-</div>
-
-<!-- Scan modal -->
-<div class="modal-overlay" id="scan-modal">
-  <div class="modal">
-    <div class="modal-head"><span class="modal-title">new scan</span><button class="modal-close" onclick="closeScanModal()">x</button></div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">target domain</label><input class="form-input" id="scan-domain" placeholder="example.com"/></div>
-      <div class="form-group"><label class="form-label">modules</label><div class="modules-grid" id="modules-grid"></div></div>
-      <button class="adv-toggle" onclick="document.getElementById('adv-fields').classList.toggle('open')">advanced options ▾</button>
-      <div class="adv-fields" id="adv-fields">
-        <div class="form-group"><label class="form-label">threads</label><input class="form-input" id="scan-threads" placeholder="15"/></div>
-        <div class="form-group"><label class="form-label">rate limit</label><input class="form-input" id="scan-rate" placeholder="150"/></div>
-        <div class="form-group"><label class="form-label">top ports</label><input class="form-input" id="scan-ports" placeholder="1000"/></div>
+      <div class="table-toolbar">
+        <div class="table-toolbar-left">
+          <input type="text" class="triage-search" id="explorer-search" placeholder="Filter targets..." oninput="filterTargets(this.value)" />
+        </div>
       </div>
-      <div class="scan-log" id="scan-log"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeScanModal()">close</button>
-      <button class="btn btn-primary" id="start-scan-btn" onclick="startScan()">start scan</button>
+
+      <div class="table-container">
+        <table class="custom-table">
+          <thead>
+            <tr>
+              <th>Target Directory / Domain</th>
+              <th style="width: 180px;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="targets-container">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- Lightbox -->
-<div class="lightbox" id="lightbox"><img id="lb-img" src="" alt=""/><div class="lb-label" id="lb-label"></div></div>
+  <!-- Workspace Container (Sidebar + Content Panel) -->
+  <div class="app-container">
 
-<!-- Monitor modal -->
-<div class="modal-overlay" id="monitor-modal">
-  <div class="modal">
-    <div class="modal-head"><span class="modal-title">run monitor</span><button class="modal-close" onclick="closeMonitorModal()">x</button></div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">target domain</label><input class="form-input" id="monitor-domain" placeholder="example.com"/></div>
-      <p style="font-size:11px;color:var(--fg4);margin-top:8px">lightweight subdomain + port scan. diffs against baseline.</p>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">404Plyh<span>::triage</span></div>
+      </div>
+      <div class="target-select-container">
+        <button class="btn-back-explorer" onclick="showExplorer()">&lt; back to explorer</button>
+      </div>
+      <ul class="nav-list">
+        <li class="nav-item active" id="nav-overview"><button onclick="switchView('overview')">Overview</button></li>
+        <li class="nav-item" id="nav-triage"><button onclick="switchView('triage')">Hunt Queue <span class="nav-badge" id="badge-triage">0</span></button></li>
+        <li class="nav-item" id="nav-assets"><button onclick="switchView('assets')">Assets <span class="nav-badge" id="badge-assets">0</span></button></li>
+        <li class="nav-item" id="nav-webapps"><button onclick="switchView('webapps')">Web Apps <span class="nav-badge" id="badge-webapps">0</span></button></li>
+        <li class="nav-item" id="nav-screenshots"><button onclick="switchView('screenshots')">Screenshots <span class="nav-badge" id="badge-screenshots">0</span></button></li>
+        <li class="nav-item" id="nav-historical"><button onclick="switchView('historical')">Historical <span class="nav-badge" id="badge-historical">0</span></button></li>
+        <li class="nav-item" id="nav-js"><button onclick="switchView('js')">JS <span class="nav-badge" id="badge-js">0</span></button></li>
+        <li class="nav-item" id="nav-ports"><button onclick="switchView('ports')">Ports <span class="nav-badge" id="badge-ports">0</span></button></li>
+        <li class="nav-item" id="nav-dorks"><button onclick="switchView('dorks')">Dorks <span class="nav-badge" id="badge-dorks">0</span></button></li>
+        <li class="nav-item" id="nav-monitor"><button onclick="switchView('monitor')">Monitor <span class="nav-badge" id="badge-monitor">0</span></button></li>
+        <li class="nav-item" id="nav-logs"><button onclick="switchView('logs')">Logs</button></li>
+        <li class="nav-item" id="nav-rawfiles"><button onclick="switchView('rawfiles')">Raw Files</button></li>
+      </ul>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeMonitorModal()">cancel</button>
-      <button class="btn btn-primary" onclick="submitMonitorModal()">run</button>
+
+    <!-- Main Content Panel -->
+    <div class="main-panel">
+      <div class="topbar">
+        <div class="topbar-title-section">
+          <div class="topbar-title" id="topbar-domain">--</div>
+          <div class="topbar-meta">
+            <span>scanned: <b id="topbar-date">--</b></span>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="btn btn-sm btn-primary" onclick="openScanModal()">new scan</button>
+          <button class="btn btn-sm" onclick="runMonitorScan()">monitor</button>
+        </div>
+      </div>
+
+      <div class="content-area">
+
+        <!-- Scan Status Header -->
+        <div class="scan-status-bar" id="scan-bar" style="padding: 12px 16px;">
+          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <div class="scan-status-info">
+                <div class="spinner"></div>
+                <span id="scan-bar-text">Active scan running...</span>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button class="btn btn-sm btn-danger" onclick="stopScan()">stop</button>
+                <button class="btn btn-sm" onclick="openScanLog()">view log</button>
+              </div>
+            </div>
+            <div style="width: 100%; background: var(--border); height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px;">
+              <div id="scan-progress-bar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.4s ease;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: Overview -->
+        <div class="view-section active" id="view-overview">
+          <div class="overview-stats-row" id="stats-grid">
+            <!-- Dynamically populated -->
+          </div>
+
+          <div class="panel-grid">
+            <div class="panel">
+              <div class="panel-title">Latest Monitor Changes</div>
+              <div id="overview-monitor-changes">
+                <div class="empty-placeholder">No recent changes detected.</div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Top Interesting Assets</div>
+              <div id="overview-top-assets" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: Hunt Queue -->
+        <div class="view-section" id="view-triage">
+          <div class="triage-bar">
+            <div class="triage-filters">
+              <button class="btn btn-sm btn-primary" id="btn-triage-all" onclick="filterTriagePriority('all')">All</button>
+              <button class="btn btn-sm" id="btn-triage-high" onclick="filterTriagePriority('high')">High</button>
+              <button class="btn btn-sm" id="btn-triage-med" onclick="filterTriagePriority('med')">Med</button>
+              <button class="btn btn-sm" id="btn-triage-low" onclick="filterTriagePriority('low')">Low</button>
+              <button class="btn btn-sm" id="btn-triage-starred" onclick="filterTriagePriority('starred')">Starred</button>
+            </div>
+            <div class="triage-filters">
+              <input type="text" class="triage-search" id="triage-search-input" placeholder="Search hosts, tech, labels..." oninput="filterTriageText(this.value)" />
+              <label class="toolbar-checkbox-label">
+                <input type="checkbox" id="triage-hide-ignored" checked onchange="toggleHideIgnored(this.checked)" /> Hide Ignored
+              </label>
+            </div>
+          </div>
+
+          <div class="triage-list" id="triage-list-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- VIEW: Assets -->
+        <div class="view-section" id="view-assets">
+          <div class="section-tabs-bar">
+            <button class="section-tab-btn active" id="tab-assets-subs" onclick="switchSectionSubTab('assets', 'subs')">Subdomains <span class="nav-badge" id="tc-assets-subs">0</span></button>
+            <button class="section-tab-btn" id="tab-assets-dns" onclick="switchSectionSubTab('assets', 'dns')">DNS Resolved <span class="nav-badge" id="tc-assets-dns">0</span></button>
+          </div>
+          
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-assets-search" placeholder="Search assets..." oninput="assetsFilter(this.value)" />
+            </div>
+          </div>
+
+          <div class="table-container" id="data-assets-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Web Apps -->
+        <div class="view-section" id="view-webapps">
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-webapps-search" placeholder="Search web apps..." oninput="webappsFilter(this.value)" />
+              <select class="toolbar-select" id="filter-webapps-status" onchange="webappsStatusFilter(this.value)">
+                <option value="">All Status Codes</option>
+                <option value="2">2xx Success</option>
+                <option value="3">3xx Redirects</option>
+                <option value="4">4xx Errors</option>
+                <option value="5">5xx Errors</option>
+              </select>
+            </div>
+            <div class="table-toolbar-right">
+              <label class="toolbar-checkbox-label">
+                <input type="checkbox" id="webapps-hide-duplicates" checked onchange="toggleWebappsHideDuplicates(this.checked)" /> Hide duplicate titles
+              </label>
+            </div>
+          </div>
+
+          <div class="table-container" id="data-webapps-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Screenshots -->
+        <div class="view-section" id="view-screenshots">
+          <div class="ss-grid" id="data-screenshots">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Historical -->
+        <div class="view-section" id="view-historical">
+          <div class="section-tabs-bar">
+            <button class="section-tab-btn active" id="tab-historical-interesting" onclick="switchSectionSubTab('historical', 'interesting')">Interesting <span class="nav-badge" id="tc-historical-interesting">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-validated" onclick="switchSectionSubTab('historical', 'validated')">Validated Live <span class="nav-badge" id="tc-historical-validated">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-auth" onclick="switchSectionSubTab('historical', 'auth')">Auth/Admin <span class="nav-badge" id="tc-historical-auth">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-apis" onclick="switchSectionSubTab('historical', 'apis')">APIs <span class="nav-badge" id="tc-historical-apis">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-sensitive" onclick="switchSectionSubTab('historical', 'sensitive')">Sensitive Files <span class="nav-badge" id="tc-historical-sensitive">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-static" onclick="switchSectionSubTab('historical', 'static')">Static Files <span class="nav-badge" id="tc-historical-static">0</span></button>
+            <button class="section-tab-btn" id="tab-historical-all" onclick="switchSectionSubTab('historical', 'all')">All <span class="nav-badge" id="tc-historical-all">0</span></button>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-historical-search" placeholder="Filter URLs..." oninput="historicalFilter(this.value)" />
+              <input type="text" class="toolbar-input" id="filter-historical-host" placeholder="Filter by host..." oninput="historicalHostFilter(this.value)" />
+              <input type="text" class="toolbar-input" id="filter-historical-ext" placeholder="Extension (e.g. php, json)..." oninput="historicalExtFilter(this.value)" />
+            </div>
+            <div class="table-toolbar-right">
+              <label class="toolbar-checkbox-label">
+                <input type="checkbox" id="hist-hide-static" checked onchange="toggleHistHideStatic(this.checked)" /> Hide static
+              </label>
+              <label class="toolbar-checkbox-label">
+                <input type="checkbox" id="hist-hide-404" checked onchange="toggleHistHide404(this.checked)" /> Hide 404
+              </label>
+              <label class="toolbar-checkbox-label">
+                <input type="checkbox" id="hist-hide-dupes" checked onchange="toggleHistHideDupes(this.checked)" /> Hide dupes
+              </label>
+            </div>
+          </div>
+
+          <div class="table-container" id="data-historical-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: JS -->
+        <div class="view-section" id="view-js">
+          <div class="section-tabs-bar">
+            <button class="section-tab-btn active" id="tab-js-scripts" onclick="switchSectionSubTab('js', 'scripts')">Scripts <span class="nav-badge" id="tc-js-scripts">0</span></button>
+            <button class="section-tab-btn" id="tab-js-endpoints" onclick="switchSectionSubTab('js', 'endpoints')">Endpoints <span class="nav-badge" id="tc-js-endpoints">0</span></button>
+            <button class="section-tab-btn" id="tab-js-secrets" onclick="switchSectionSubTab('js', 'secrets')">Secrets <span class="nav-badge" id="tc-js-secrets">0</span></button>
+            <button class="section-tab-btn" id="tab-js-leakage" onclick="switchSectionSubTab('js', 'leakage')">Leakage <span class="nav-badge" id="tc-js-leakage">0</span></button>
+            <button class="section-tab-btn" id="tab-js-comments" onclick="switchSectionSubTab('js', 'comments')">Comments <span class="nav-badge" id="tc-js-comments">0</span></button>
+            <button class="section-tab-btn" id="tab-js-maps" onclick="switchSectionSubTab('js', 'maps')">Source Maps <span class="nav-badge" id="tc-js-maps">0</span></button>
+            <button class="section-tab-btn" id="tab-js-api" onclick="switchSectionSubTab('js', 'api')">API Endpoints <span class="nav-badge" id="tc-js-api">0</span></button>
+            <button class="section-tab-btn" id="tab-js-buckets" onclick="switchSectionSubTab('js', 'buckets')">Buckets <span class="nav-badge" id="tc-js-buckets">0</span></button>
+            <button class="section-tab-btn" id="tab-js-ws" onclick="switchSectionSubTab('js', 'ws')">Websockets <span class="nav-badge" id="tc-js-ws">0</span></button>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-js-search" placeholder="Search JS data..." oninput="jsFilter(this.value)" />
+            </div>
+          </div>
+
+          <div class="table-container" id="data-js-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Ports -->
+        <div class="view-section" id="view-ports">
+          <div class="section-tabs-bar">
+            <button class="section-tab-btn active" id="tab-ports-naabu" onclick="switchSectionSubTab('ports', 'naabu')">Naabu <span class="nav-badge" id="tc-ports-naabu">0</span></button>
+            <button class="section-tab-btn" id="tab-ports-targets" onclick="switchSectionSubTab('ports', 'targets')">Targets <span class="nav-badge" id="tc-ports-targets">0</span></button>
+            <button class="section-tab-btn" id="tab-ports-nmap" onclick="switchSectionSubTab('ports', 'nmap')">Nmap <span class="nav-badge" id="tc-ports-nmap">0</span></button>
+            <button class="section-tab-btn" id="tab-ports-gnmap" onclick="switchSectionSubTab('ports', 'gnmap')">Greppable <span class="nav-badge" id="tc-ports-gnmap">0</span></button>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-ports-search" placeholder="Search ports..." oninput="portsFilter(this.value)" />
+            </div>
+          </div>
+
+          <div class="table-container" id="data-ports-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Dorks -->
+        <div class="view-section" id="view-dorks">
+          <div class="section-tabs-bar">
+            <button class="section-tab-btn active" id="tab-dorks-all" onclick="switchSectionSubTab('dorks', 'all')">All findings <span class="nav-badge" id="tc-dorks-all">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-config" onclick="switchSectionSubTab('dorks', 'config')">Config Files <span class="nav-badge" id="tc-dorks-config">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-backups" onclick="switchSectionSubTab('dorks', 'backups')">Backups <span class="nav-badge" id="tc-dorks-backups">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-logs" onclick="switchSectionSubTab('dorks', 'logs')">Logs <span class="nav-badge" id="tc-dorks-logs">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-admin" onclick="switchSectionSubTab('dorks', 'admin')">Admin Panels <span class="nav-badge" id="tc-dorks-admin">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-cloud" onclick="switchSectionSubTab('dorks', 'cloud')">Cloud Assets <span class="nav-badge" id="tc-dorks-cloud">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-auth" onclick="switchSectionSubTab('dorks', 'auth')">Auth tokens <span class="nav-badge" id="tc-dorks-auth">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-active" onclick="switchSectionSubTab('dorks', 'active')">Active hits <span class="nav-badge" id="tc-dorks-active">0</span></button>
+            <button class="section-tab-btn" id="tab-dorks-confirmed" onclick="switchSectionSubTab('dorks', 'confirmed')">Confirmed <span class="nav-badge" id="tc-dorks-confirmed">0</span></button>
+          </div>
+
+          <div class="table-toolbar">
+            <div class="table-toolbar-left">
+              <input type="text" class="toolbar-input" id="filter-dorks-search" placeholder="Search dorks..." oninput="dorksFilter(this.value)" />
+            </div>
+          </div>
+
+          <div class="table-container" id="data-dorks-content">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- VIEW: Monitor -->
+        <div class="view-section" id="view-monitor">
+          <div class="panel-grid">
+            <div class="panel" style="margin-bottom: 0;">
+              <div class="panel-title">Baseline Stats</div>
+              <div class="monitor-summary" id="monitor-baseline-summary">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-title">Changes Timeline</div>
+            <div class="monitor-timeline" id="data-monitor">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- VIEW: Logs -->
+        <div class="view-section" id="view-logs">
+          <div class="panel" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-shrink: 0;">
+              <div class="panel-title" style="margin-bottom: 0;">Scan Output Logs</div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <label style="font-size: 11px; color: var(--muted); font-family: var(--font-sans);">Select Run:</label>
+                <select class="form-input" id="log-file-selector" onchange="window.selectLogFile(this.value)" style="padding: 4px 8px; font-size: 11px; width: 220px; font-family: var(--font-mono);"></select>
+              </div>
+            </div>
+            <div class="scan-log-console visible" id="logs-scan-log" style="flex-grow: 1; min-height: 400px; max-height: calc(100vh - 220px); overflow-y: auto;">No logs active. Select a previous scan log or start a new scan.</div>
+          </div>
+        </div>
+
+        <!-- VIEW: Raw Files -->
+        <div class="view-section" id="view-rawfiles">
+          <div class="raw-files-layout">
+            <div class="raw-files-list" id="raw-files-index">
+              <!-- Populated dynamically -->
+            </div>
+            <div class="raw-view-panel" id="raw-file-viewer">
+              Select a raw file from the left panel to inspect its contents directly.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Scan Modal -->
+  <div class="modal-overlay" id="scan-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Run New Scan</span>
+        <button class="modal-close" onclick="closeScanModal()">x</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Target Domain</label>
+          <input class="form-input" id="scan-domain" placeholder="example.com"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Active Modules</label>
+          <div class="modules-grid" id="modules-grid"></div>
+        </div>
+        <button class="adv-toggle" onclick="document.getElementById('adv-fields').classList.toggle('open')">advanced options ▾</button>
+        <div class="adv-fields" id="adv-fields">
+          <div class="form-group">
+            <label class="form-label">Threads</label>
+            <input class="form-input" id="scan-threads" placeholder="15"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rate Limit</label>
+            <input class="form-input" id="scan-rate" placeholder="150"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Top Ports</label>
+            <input class="form-input" id="scan-ports" placeholder="1000"/>
+          </div>
+        </div>
+        <div class="scan-log-console" id="scan-log"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeScanModal()">Cancel</button>
+        <button class="btn btn-primary" id="start-scan-btn" onclick="startScan()">Start scan</button>
+      </div>
     </div>
   </div>
-</div>
 
-<script src="dashboard.js"></script>
+  <!-- Monitor Modal -->
+  <div class="modal-overlay" id="monitor-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Run Monitor Check</span>
+        <button class="modal-close" onclick="closeMonitorModal()">x</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Target Domain</label>
+          <input class="form-input" id="monitor-domain" placeholder="example.com"/>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin-top:8px">Runs a lightweight subdomain + port check to detect alterations against saved baselines.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeMonitorModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="submitMonitorModal()">Run check</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox">
+    <img id="lb-img" src="" alt=""/>
+    <div class="lb-label" id="lb-label"></div>
+  </div>
+
+  <script src="dashboard.js"></script>
 </body>
 </html>

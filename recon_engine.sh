@@ -16,12 +16,20 @@
 
 set -uo pipefail
 
+# Ensure standard bin paths are available (crucial for python subprocesses)
+export PATH="$PATH:$HOME/go/bin:$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/go/bin:$HOME/Tools:/home/void/Tools:/home/void/go/bin"
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Resolve script directory (works even if symlinked)
 # ─────────────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODULES_DIR="$SCRIPT_DIR/modules"
+
+# Load environment variables (API keys) from .env file if it exists
+if [[ -f "$SCRIPT_DIR/.env" ]]; then
+    export $(grep -v '^#' "$SCRIPT_DIR/.env" | xargs)
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Source all modules
@@ -36,12 +44,14 @@ source "$MODULES_DIR/dns.sh"          # Module 2: DNS Resolution
 source "$MODULES_DIR/http.sh"         # Module 3: HTTP Probing
 source "$MODULES_DIR/screenshots.sh"  # Module 4: Screenshots
 source "$MODULES_DIR/ports.sh"        # Module 5: Port Scanning
-source "$MODULES_DIR/js.sh"           # Module 6: JS Analysis
+source "$MODULES_DIR/js_deep.sh"     # Module 6: Deep JS Analysis
 source "$MODULES_DIR/historical.sh"   # Module 7: Historical URLs
 source "$MODULES_DIR/crawl.sh"        # Module 8: Endpoint Crawling
 source "$MODULES_DIR/dorks.sh"        # Module: Dork-Style Sensitive File Discovery
+source "$MODULES_DIR/validate_historical.sh"   # Module: Optional Historical URL Validation
 source "$MODULES_DIR/infra.sh"        # Module 9: Infrastructure Mapping
 source "$MODULES_DIR/report.sh"       # Module 10: Report Generation
+source "$MODULES_DIR/notify.sh"       # Discord notifications
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI Usage
@@ -73,6 +83,7 @@ usage() {
     echo "      --skip-historical        Skip historical URL discovery"
     echo "      --skip-crawl             Skip endpoint crawling"
     echo "      --skip-dorks             Skip dork-style sensitive file discovery"
+    echo "      --validate-historical    Validate interesting historical URLs (slow/stealthy)"
     echo "      --skip-infra             Skip infrastructure mapping"
     echo "      --skip-report            Skip report generation"
     echo ""
@@ -112,6 +123,7 @@ parse_args() {
             --skip-historical)   SKIP_HISTORICAL=true; shift ;;
             --skip-crawl)        SKIP_CRAWL=true; shift ;;
             --skip-dorks)        SKIP_DORKS=true; shift ;;
+            --validate-historical) VALIDATE_HISTORICAL=true; shift ;;
             --skip-infra)        SKIP_INFRA=true; shift ;;
             --skip-report)       SKIP_REPORT=true; shift ;;
             --check-deps)        CHECK_DEPS_ONLY=true; shift ;;
@@ -154,7 +166,7 @@ handle_recursion() {
 
         module_dns_resolution
         module_http_probing
-        module_js_analysis
+        module_js_deep
         handle_recursion
     elif [[ "$NEW_DOMAINS_FOUND" == true ]]; then
         warn "Maximum recursion rounds ($RECURSIVE_ROUNDS) reached. Stopping recursion."
@@ -209,13 +221,17 @@ main() {
     module_http_probing             # 3. Probe HTTP services
     module_screenshots              # 4. Capture screenshots
     module_port_scanning            # 5. Scan ports
-    module_js_analysis              # 6. Analyze JavaScript
+    module_js_deep                  # 6. Deep JS Analysis
     handle_recursion                #    (recursive JS discovery)
     module_historical               # 7. Historical URLs
     module_crawl_endpoints          # 8. Crawl endpoints
     module_dorks                    #    Dork-style sensitive file discovery
+    module_validate_historical      #    Optional Historical URL validation
     module_infra_mapping            # 9. Map infrastructure
     module_report                   # 10. Generate reports
+
+    # ── Send scan-complete Discord notification ──
+    notify_scan_complete "$DOMAIN" "$OUTPUT_DIR"
 
     local end_time elapsed_min
     end_time=$(date +%s)

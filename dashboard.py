@@ -16,6 +16,7 @@ Then open http://<your-pi-ip>:9090 in any browser on your network.
 import argparse
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -86,7 +87,7 @@ class ScanManager:
             ts = time.strftime("%Y%m%d_%H%M%S")
             self.log_path = log_dir / f"scan_{ts}.log"
 
-            log_fh = open(self.log_path, "w")
+            log_fh = open(self.log_path, "w", buffering=1)
             self.process = subprocess.Popen(
                 cmd,
                 stdout=log_fh,
@@ -114,12 +115,40 @@ class ScanManager:
             "started_at": self.started_at,
             "finished": self.finished,
             "log_tail": [],
+            "current_step": "Initializing",
+            "progress_percent": 0
         }
         if self.log_path and self.log_path.exists():
             try:
                 with open(self.log_path, "r", errors="replace") as f:
                     lines = f.readlines()
                     result["log_tail"] = [l.rstrip() for l in lines[-80:]]
+                    
+                    # Track steps and calculate progress
+                    step_map = {
+                        "Subdomain Discovery": 10,
+                        "DNS Resolution": 20,
+                        "HTTP Probing": 30,
+                        "Visual Surface Mapping": 40,
+                        "Network Service Enumeration": 50,
+                        "Deep JS Analysis": 60,
+                        "Historical URLs": 70,
+                        "Endpoint Crawling": 80,
+                        "Infrastructure Mapping": 90,
+                        "Report Generation": 100
+                    }
+                    for line in lines:
+                        # Strip ANSI escape codes
+                        clean_line = re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', line)
+                        if "Module" in clean_line:
+                            match = re.search(r'Module\s*(?:\d+)?:\s*([^\r\n]+)', clean_line)
+                            if match:
+                                step_name = match.group(1).strip()
+                                result["current_step"] = step_name
+                                for k, v in step_map.items():
+                                    if k in step_name:
+                                        result["progress_percent"] = v
+                                        break
             except Exception:
                 pass
         if running and self.started_at:
@@ -222,9 +251,14 @@ def build_stats(target_dir):
             "screenshots": count_screenshots(d / "screenshots"),
             "open_ports": count_lines(d / "ports" / "naabu.txt"),
             "js_endpoints": count_lines(d / "js" / "endpoints.txt"),
+            "js_secrets": count_lines(d / "js" / "secrets.txt"),
+            "js_scripts": count_lines(d / "js" / "scripts_alive.txt"),
+            "js_leakage": count_lines(d / "js" / "leakage.txt"),
+            "js_comments": count_lines(d / "js" / "comments.txt"),
             "historical_urls": count_lines(d / "historical" / "all_urls.txt"),
             "crawled_endpoints": count_lines(d / "endpoints" / "all.txt"),
             "dork_findings": count_lines(d / "dorks" / "all_findings.txt"),
+            "historical_validated": count_lines(d / "historical" / "validated_interesting.json"),
         },
     }
 
@@ -394,6 +428,30 @@ def make_handler(projects_dir, scan_manager):
                 self.send_json({"files": files})
                 return
 
+            # ─── API: List raw files within a target ───
+            if path == "/api/target/files":
+                target = qs.get("target", [None])[0]
+                if not target:
+                    self.send_json({"error": "target param required"}, 400)
+                    return
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({"error": "Target not found"}, 404)
+                    return
+                files = []
+                for root, _, filenames in os.walk(target_dir):
+                    for filename in filenames:
+                        full_p = Path(root) / filename
+                        rel_p = full_p.relative_to(target_dir)
+                        # Filter out binary screenshots, scan log history, hidden files
+                        if rel_p.name.startswith(".") or "screenshots/" in str(rel_p) or (rel_p.parts and rel_p.parts[0] == "screenshots"):
+                            continue
+                        if str(rel_p).startswith("logs/scan_"):
+                            continue
+                        files.append(str(rel_p))
+                self.send_json({"files": sorted(files)})
+                return
+
             # ─── Serve screenshot images ───
             if path.startswith("/screenshots/"):
                 rest = path[len("/screenshots/"):]
@@ -407,6 +465,189 @@ def make_handler(projects_dir, scan_manager):
                     self.send_json({"error": "Access denied"}, 403)
                     return
                 self.send_file_data(resolved)
+                return
+
+            # ─── API: List scan logs ───
+            if path == "/api/logs":
+                target = qs.get("target", [None])[0]
+                if not target:
+                    self.send_json({"error": "target param required"}, 400)
+                    return
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({"error": "Target not found"}, 404)
+                    return
+                log_dir = target_dir / "logs"
+                files = []
+                if log_dir.is_dir():
+                    files = sorted([
+                        f.name for f in log_dir.glob("scan_*.log")
+                    ], reverse=True)
+                self.send_json({"files": files})
+                return
+
+            # ─── API: Server-side paginated/filtered historical URLs ───
+            if path == "/api/data/historical":
+                target = qs.get("target", [None])[0]
+                if not target:
+                    self.send_json({"error": "target param required"}, 400)
+                    return
+                
+                tab = qs.get("tab", ["interesting"])[0]
+                query = qs.get("query", [""])[0].strip().lower()
+                host = qs.get("host", [""])[0].strip().lower()
+                ext = qs.get("ext", [""])[0].strip().lower()
+                hide_static = qs.get("hideStatic", ["false"])[0].lower() == "true"
+                hide_404 = qs.get("hide404", ["false"])[0].lower() == "true"
+                hide_dupes = qs.get("hideDupes", ["false"])[0].lower() == "true"
+                
+                try:
+                    page = int(qs.get("page", ["0"])[0])
+                    page_size = int(qs.get("pageSize", ["50"])[0])
+                except ValueError:
+                    page = 0
+                    page_size = 50
+
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({"error": "Target not found"}, 404)
+                    return
+
+                counts = {
+                    "interesting": 0,
+                    "validated": 0,
+                    "auth": 0,
+                    "apis": 0,
+                    "sensitive": 0,
+                    "static": 0,
+                    "all": 0
+                }
+                
+                val_file = target_dir / "historical" / "validated_interesting.json"
+                if val_file.exists():
+                    counts["validated"] = count_lines(val_file)
+                
+                file_path = target_dir / "historical" / "all_urls.txt"
+                items = []
+                active_match_count = 0
+                start_idx = page * page_size
+                end_idx = start_idx + page_size
+                
+                if file_path.exists():
+                    re_auth = re.compile(r"(login|admin|dashboard|portal|panel|auth)", re.IGNORECASE)
+                    re_apis = re.compile(r"(/api/|/v[0-9]+/|graphql|rest|swagger|openapi)", re.IGNORECASE)
+                    re_sensitive = re.compile(r"\.(json|xml|yaml|yml|conf|config|env|bak|old|sql|log)", re.IGNORECASE)
+                    int_patterns = ["admin", "login", "api", "auth", "debug", "config", "backup", "swagger", "graphql", "upload", "internal", "dev", "staging", "test", ".env", ".json", ".xml", "db", "sql"]
+                    static_exts = {".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".ico"}
+                    
+                    seen_active = set()
+                    
+                    with open(file_path, "r", errors="replace") as f:
+                        for line in f:
+                            url = line.strip()
+                            if not url:
+                                continue
+                            
+                            url_lower = url.lower()
+                            path_part = url_lower.split("?")[0]
+                            is_static = any(path_part.endswith(ext) for ext in static_exts)
+                            
+                            counts["all"] += 1
+                            if is_static:
+                                counts["static"] += 1
+                            
+                            is_interesting = any(pat in url_lower for pat in int_patterns)
+                            if is_interesting:
+                                counts["interesting"] += 1
+                                
+                            is_auth = bool(re_auth.search(url_lower))
+                            if is_auth:
+                                counts["auth"] += 1
+                                
+                            is_apis = bool(re_apis.search(url_lower))
+                            if is_apis:
+                                counts["apis"] += 1
+                                
+                            is_sensitive = bool(re_sensitive.search(url_lower))
+                            if is_sensitive:
+                                counts["sensitive"] += 1
+                            
+                            if tab == "validated":
+                                continue
+                            
+                            if hide_static and tab != "static" and is_static:
+                                continue
+                            
+                            if tab == "interesting" and not is_interesting:
+                                continue
+                            elif tab == "auth" and not is_auth:
+                                continue
+                            elif tab == "apis" and not is_apis:
+                                continue
+                            elif tab == "sensitive" and not is_sensitive:
+                                continue
+                            elif tab == "static" and not is_static:
+                                continue
+                            
+                            if host and host not in url_lower:
+                                continue
+                            if ext and not path_part.endswith("." + ext):
+                                continue
+                            if query and query not in url_lower:
+                                continue
+                            
+                            if hide_dupes:
+                                if url in seen_active:
+                                    continue
+                                seen_active.add(url)
+                            
+                            if active_match_count >= start_idx and active_match_count < end_idx:
+                                items.append(url)
+                            active_match_count += 1
+                            
+                if tab == "validated" and val_file.exists():
+                    seen_active = set()
+                    with open(val_file, "r", errors="replace") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            try:
+                                item = json.loads(line)
+                            except:
+                                continue
+                            url = item.get("url", "")
+                            if not url:
+                                continue
+                            url_lower = url.lower()
+                            
+                            if hide_404 and item.get("status_code") == 404:
+                                continue
+                            if host and host not in url_lower:
+                                continue
+                            if ext and not url_lower.split("?")[0].endswith("." + ext):
+                                continue
+                            if query:
+                                title = (item.get("title") or "").lower()
+                                if query not in url_lower and query not in title:
+                                    continue
+                            
+                            if hide_dupes:
+                                if url in seen_active:
+                                    continue
+                                seen_active.add(url)
+                                
+                            if active_match_count >= start_idx and active_match_count < end_idx:
+                                items.append(item)
+                            active_match_count += 1
+
+                self.send_json({
+                    "counts": counts,
+                    "items": items,
+                    "total": active_match_count,
+                    "page": page,
+                    "pageSize": page_size
+                })
                 return
 
             # ─── API: Scan status ───

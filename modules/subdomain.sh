@@ -24,7 +24,7 @@ module_subdomain_discovery() {
     # ── amass (passive) ──
     if require_tool "amass"; then
         run_safe "amass passive" \
-            "amass enum -passive -d '$DOMAIN' -o '$subs_dir/amass.txt' 2>>'$LOG_FILE'"
+            "timeout 300 amass enum -passive -d '$DOMAIN' -o '$subs_dir/amass.txt' 2>>'$LOG_FILE'"
         report_count "$subs_dir/amass.txt" "amass results"
     fi
 

@@ -75,10 +75,11 @@ check_dependencies() {
     check_tool "nmap"  || ((missing_optional++))
 
     echo ""
-    echo -e "${WHITE}JavaScript Analysis:${RESET}"
-    check_tool "python3"      || ((missing_optional++))
-    check_py_tool "$LINKFINDER_PATH" "linkfinder.py"   || ((missing_optional++))
-    check_py_tool "$SECRETFINDER_PATH" "SecretFinder.py" || ((missing_optional++))
+    echo -e "${WHITE}JavaScript Analysis (Deep Engine):${RESET}"
+    check_tool "python3" || ((missing_optional++))
+    check_tool "httpx"   || ((missing_optional++)) # used for scripting checks
+    check_py_tool "$SCRIPT_DIR/modules/js_scanner.py" "js_scanner.py" || ((missing_optional++))
+    check_py_tool "$SCRIPT_DIR/modules/sourcemap_extractor.py" "sourcemap_extractor.py" || ((missing_optional++))
 
     echo ""
     echo -e "${WHITE}Historical URLs:${RESET}"
@@ -92,6 +93,10 @@ check_dependencies() {
 
     echo ""
     echo -e "${WHITE}Dorking (Sensitive File Discovery):${RESET}"
+    check_tool "httpx" || ((missing_optional++))  # reused from HTTP probing
+
+    echo ""
+    echo -e "${WHITE}Historical URL Validation:${RESET}"
     check_tool "httpx" || ((missing_optional++))  # reused from HTTP probing
 
     echo ""
