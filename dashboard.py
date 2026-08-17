@@ -101,7 +101,10 @@ class ScanManager:
     def stop(self):
         with self.lock:
             if self.process and self.process.poll() is None:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                try:
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
                 self.process.wait(timeout=5)
                 self.finished = True
                 return True, "Scan stopped"
@@ -284,6 +287,93 @@ def list_targets(projects_dir):
 
 # ── HTTP Handler ─────────────────────────────────────────────────────────────
 
+class HistoricalIndex:
+    def __init__(self):
+        self.cache = {}
+        self.lock = threading.Lock()
+        self.re_auth = re.compile(r"(login|admin|dashboard|portal|panel|auth)", re.IGNORECASE)
+        self.re_apis = re.compile(r"(/api/|/v[0-9]+/|graphql|rest|swagger|openapi)", re.IGNORECASE)
+        self.re_sensitive = re.compile(r"\.(json|xml|yaml|yml|conf|config|env|bak|old|sql|log)", re.IGNORECASE)
+        self.int_patterns = ["admin", "login", "api", "auth", "debug", "config", "backup", "swagger", "graphql", "upload", "internal", "dev", "staging", "test", ".env", ".json", ".xml", "db", "sql"]
+        self.static_exts = {".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".ico"}
+
+    def get_index(self, target_name, file_path):
+        if not file_path.exists():
+            return None
+            
+        mtime = file_path.stat().st_mtime
+        
+        with self.lock:
+            cached = self.cache.get(target_name)
+            if cached and cached['mtime'] == mtime:
+                return cached['data']
+                
+        counts = {
+            "interesting": 0, "auth": 0, "apis": 0,
+            "sensitive": 0, "static": 0, "all": 0
+        }
+        
+        categorized = {
+            "interesting": [], "auth": [], "apis": [],
+            "sensitive": [], "static": [], "all": []
+        }
+        
+        try:
+            with open(file_path, "r", errors="replace") as f:
+                for line in f:
+                    url = line.strip()
+                    if not url:
+                        continue
+                        
+                    url_lower = url.lower()
+                    path_part = url_lower.split("?")[0]
+                    
+                    is_static = any(path_part.endswith(ext) for ext in self.static_exts)
+                    is_interesting = any(pat in url_lower for pat in self.int_patterns)
+                    is_auth = bool(self.re_auth.search(url_lower))
+                    is_apis = bool(self.re_apis.search(url_lower))
+                    is_sensitive = bool(self.re_sensitive.search(url_lower))
+                    
+                    counts["all"] += 1
+                    categorized["all"].append(url)
+                    
+                    if is_static:
+                        counts["static"] += 1
+                        categorized["static"].append(url)
+                        
+                    if is_interesting:
+                        counts["interesting"] += 1
+                        categorized["interesting"].append(url)
+                        
+                    if is_auth:
+                        counts["auth"] += 1
+                        categorized["auth"].append(url)
+                        
+                    if is_apis:
+                        counts["apis"] += 1
+                        categorized["apis"].append(url)
+                        
+                    if is_sensitive:
+                        counts["sensitive"] += 1
+                        categorized["sensitive"].append(url)
+                        
+            data = {
+                "counts": counts,
+                "categorized": categorized
+            }
+            
+            with self.lock:
+                self.cache[target_name] = {
+                    "mtime": mtime,
+                    "data": data
+                }
+                
+            return data
+        except Exception:
+            return None
+
+historical_index = HistoricalIndex()
+
 def make_handler(projects_dir, scan_manager):
     projects_path = Path(projects_dir).resolve()
 
@@ -352,7 +442,7 @@ def make_handler(projects_dir, scan_manager):
         def resolve_target_path(self, target, rel_path=""):
             """Resolve a path within a target dir, with traversal protection."""
             target_dir = (projects_path / target).resolve()
-            if not str(target_dir).startswith(str(projects_path)):
+            if target_dir != projects_path and projects_path not in target_dir.parents:
                 return None
             if rel_path:
                 full = (target_dir / rel_path).resolve()
@@ -534,76 +624,38 @@ def make_handler(projects_dir, scan_manager):
                 end_idx = start_idx + page_size
                 
                 if file_path.exists():
-                    re_auth = re.compile(r"(login|admin|dashboard|portal|panel|auth)", re.IGNORECASE)
-                    re_apis = re.compile(r"(/api/|/v[0-9]+/|graphql|rest|swagger|openapi)", re.IGNORECASE)
-                    re_sensitive = re.compile(r"\.(json|xml|yaml|yml|conf|config|env|bak|old|sql|log)", re.IGNORECASE)
-                    int_patterns = ["admin", "login", "api", "auth", "debug", "config", "backup", "swagger", "graphql", "upload", "internal", "dev", "staging", "test", ".env", ".json", ".xml", "db", "sql"]
-                    static_exts = {".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".ico"}
-                    
-                    seen_active = set()
-                    
-                    with open(file_path, "r", errors="replace") as f:
-                        for line in f:
-                            url = line.strip()
-                            if not url:
-                                continue
+                    idx_data = historical_index.get_index(target, file_path)
+                    if idx_data:
+                        for k, v in idx_data["counts"].items():
+                            counts[k] = v
+                        
+                        if tab != "validated":
+                            category_list = idx_data["categorized"].get(tab, [])
+                            seen_active = set()
                             
-                            url_lower = url.lower()
-                            path_part = url_lower.split("?")[0]
-                            is_static = any(path_part.endswith(ext) for ext in static_exts)
-                            
-                            counts["all"] += 1
-                            if is_static:
-                                counts["static"] += 1
-                            
-                            is_interesting = any(pat in url_lower for pat in int_patterns)
-                            if is_interesting:
-                                counts["interesting"] += 1
+                            for url in category_list:
+                                url_lower = url.lower()
+                                path_part = url_lower.split("?")[0]
                                 
-                            is_auth = bool(re_auth.search(url_lower))
-                            if is_auth:
-                                counts["auth"] += 1
+                                if hide_static and tab != "static":
+                                    if any(path_part.endswith(e) for e in historical_index.static_exts):
+                                        continue
                                 
-                            is_apis = bool(re_apis.search(url_lower))
-                            if is_apis:
-                                counts["apis"] += 1
-                                
-                            is_sensitive = bool(re_sensitive.search(url_lower))
-                            if is_sensitive:
-                                counts["sensitive"] += 1
-                            
-                            if tab == "validated":
-                                continue
-                            
-                            if hide_static and tab != "static" and is_static:
-                                continue
-                            
-                            if tab == "interesting" and not is_interesting:
-                                continue
-                            elif tab == "auth" and not is_auth:
-                                continue
-                            elif tab == "apis" and not is_apis:
-                                continue
-                            elif tab == "sensitive" and not is_sensitive:
-                                continue
-                            elif tab == "static" and not is_static:
-                                continue
-                            
-                            if host and host not in url_lower:
-                                continue
-                            if ext and not path_part.endswith("." + ext):
-                                continue
-                            if query and query not in url_lower:
-                                continue
-                            
-                            if hide_dupes:
-                                if url in seen_active:
+                                if host and host not in url_lower:
                                     continue
-                                seen_active.add(url)
-                            
-                            if active_match_count >= start_idx and active_match_count < end_idx:
-                                items.append(url)
-                            active_match_count += 1
+                                if ext and not path_part.endswith("." + ext):
+                                    continue
+                                if query and query not in url_lower:
+                                    continue
+                                
+                                if hide_dupes:
+                                    if url in seen_active:
+                                        continue
+                                    seen_active.add(url)
+                                
+                                if active_match_count >= start_idx and active_match_count < end_idx:
+                                    items.append(url)
+                                active_match_count += 1
                             
                 if tab == "validated" and val_file.exists():
                     seen_active = set()

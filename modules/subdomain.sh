@@ -45,7 +45,7 @@ module_subdomain_discovery() {
     # ── crt.sh ──
     step "Querying crt.sh (Certificate Transparency)"
     local crtsh_url="https://crt.sh/?q=%25.${DOMAIN}&output=json"
-    curl -s "$crtsh_url" 2>/dev/null \
+    curl -s --max-time 30 "$crtsh_url" 2>/dev/null \
         | jq -r '.[].name_value' 2>/dev/null \
         | sed 's/\*\.//g' \
         | sort -u > "$subs_dir/crtsh.txt" || true

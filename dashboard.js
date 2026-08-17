@@ -166,7 +166,7 @@ async function loadExplorer() {
 function renderTargets(targets) {
   const el = document.getElementById('targets-container');
   if (!targets.length) {
-    el.innerHTML = '<tr><td colspan="2" class="empty-placeholder">No targets found. Run a scan to register your first project.</td></tr>';
+    el.innerHTML = '<div class="empty-placeholder">No targets found. Run a scan to register your first project.</div>';
     return;
   }
   let h = '';
@@ -175,26 +175,22 @@ function renderTargets(targets) {
     const date = t.scan_date ? new Date(t.scan_date).toLocaleDateString() : '';
     const mon = t.monitor_enabled;
 
-    h += `<tr>`;
-    h += `<td>`;
-    h += `<div class="target-name" onclick="openTarget('${esc(t.name)}')">${esc(t.domain || t.name)}</div>`;
-    h += `<div class="target-stats-inline">`;
-    if (date) h += `<span>Date: <b>${date}</b></span>`;
-    if (s.total_subdomains) h += `<span>Subs: <b>${s.total_subdomains}</b></span>`;
-    if (s.alive_services) h += `<span>Web apps: <b>${s.alive_services}</b></span>`;
-    if (s.open_ports) h += `<span>Ports: <b>${s.open_ports}</b></span>`;
-    if (s.dork_findings) h += `<span>Dorks: <b style="color:var(--accent)">${s.dork_findings}</b></span>`;
+    h += `<div class="target-card" onclick="openTarget('${esc(t.name)}')">`;
+    h += `<div class="target-card-domain">${esc(t.domain || t.name)}</div>`;
+    h += `<div class="target-card-stats">`;
+    if (date) h += `<span class="stat">Scanned: <b>${date}</b></span>`;
+    if (s.total_subdomains) h += `<span class="stat">Subs: <b>${s.total_subdomains}</b></span>`;
+    if (s.alive_services) h += `<span class="stat">Alive: <b>${s.alive_services}</b></span>`;
+    if (s.open_ports) h += `<span class="stat">Ports: <b>${s.open_ports}</b></span>`;
+    if (s.dork_findings) h += `<span class="stat">Dorks: <b style="color:var(--accent)">${s.dork_findings}</b></span>`;
     h += `</div>`;
-    h += `</td>`;
-    h += `<td>`;
-    h += `<div style="display:flex;align-items:center;gap:12px;">`;
-    h += `<button class="btn btn-sm" onclick="openTarget('${esc(t.name)}')">View Dashboard</button>`;
+    h += `<div class="target-card-actions">`;
+    h += `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); openTarget('${esc(t.name)}')">Open</button>`;
     h += `<label class="toolbar-checkbox-label" onclick="event.stopPropagation()">`;
-    h += `<input type="checkbox" ${mon ? 'checked' : ''} onchange="toggleMonitor('${esc(t.name)}', this.checked)"/> Monitor`;
+    h += `<input type="checkbox" ${mon ? 'checked' : ''} onchange="event.stopPropagation(); toggleMonitor('${esc(t.name)}', this.checked)"/> Monitor`;
     h += `</label>`;
     h += `</div>`;
-    h += `</td>`;
-    h += `</tr>`;
+    h += `</div>`;
   }
   el.innerHTML = h;
 }
@@ -1532,8 +1528,13 @@ window.stopScan = async function() {
   await postJSON('/api/scan/stop', {});
 };
 
-// Active scan logger check
+// Active scan logger check with smart auto-scroll
 let scanPollTimer = null;
+function isNearBottom(el) {
+  if (!el) return true;
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+}
+
 function pollScanLog() {
   if (scanPollTimer) clearInterval(scanPollTimer);
   scanPollTimer = setInterval(async () => {
@@ -1541,19 +1542,25 @@ function pollScanLog() {
     if (!s) return;
     const logEl = document.getElementById('scan-log');
     const logsViewEl = document.getElementById('logs-scan-log');
+    const autoScrollEnabled = document.getElementById('log-auto-scroll')?.checked !== false;
 
     if (s.log_tail?.length) {
       const tail = s.log_tail.join('\n');
       logEl.textContent = tail;
       
-      // Update historical logs view dynamically if it's currently active or empty
+      // Update logs view dynamically if active stream
       if (logsViewEl && (logsViewEl.textContent.startsWith('No logs active') || logsViewEl.classList.contains('active-stream'))) {
+        const wasAtBottom = isNearBottom(logsViewEl);
         logsViewEl.textContent = tail;
         logsViewEl.classList.add('active-stream');
-        logsViewEl.scrollTop = logsViewEl.scrollHeight;
+        if (wasAtBottom && autoScrollEnabled) {
+          logsViewEl.scrollTop = logsViewEl.scrollHeight;
+        }
       }
     }
-    logEl.scrollTop = logEl.scrollHeight;
+    if (isNearBottom(logEl)) {
+      logEl.scrollTop = logEl.scrollHeight;
+    }
 
     updateScanBar(s);
 
@@ -1683,6 +1690,40 @@ window.runMonitorScan = async () => {
   } else {
     alert(res?.message || 'Failed to start monitor check.');
   }
+};
+
+// ── Mobile Sidebar ──
+window.openSidebar = () => {
+  document.getElementById('sidebar').classList.add('mobile-open');
+  document.getElementById('sidebar-overlay').classList.add('active');
+};
+
+window.closeSidebar = () => {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+};
+
+// Close sidebar when nav item is clicked on mobile
+document.querySelectorAll('.nav-item button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (window.innerWidth <= 768) closeSidebar();
+  });
+});
+
+// ── Log Search/Filter ──
+window.filterLogContent = (query) => {
+  const consoleEl = document.getElementById('logs-scan-log');
+  if (!consoleEl || !query) return;
+  // Simple highlight approach: store original text and highlight matches
+  const text = consoleEl.textContent;
+  if (!query.trim()) {
+    consoleEl.innerHTML = '';
+    consoleEl.textContent = text;
+    return;
+  }
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  consoleEl.innerHTML = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(re, '<span class="hl">$1</span>');
 };
 
 // Initialize
