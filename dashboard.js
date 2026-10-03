@@ -48,7 +48,7 @@ function T(p){return `/api/file/${currentTarget}/${p}`}
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function parseLines(t){return t.split('\n').map(l=>l.strip ? l.strip() : l.trim()).filter(Boolean)}
-function sBadge(c){const n=parseInt(c);if(!n)return'<span class="badge-status s-na">--</span>';const k=n<300?'2xx':n<400?'3xx':n<500?'4xx':'5xx';return`<span class="badge-status s${k}">${n}</span>`}
+function sBadge(c){const n=parseInt(c);if(!n)return'<span class="st st-x">--</span>';const k=n<300?'2':n<400?'3':n<500?'4':'5';return`<span class="st st-${k}">${n}</span>`}
 function hilite(text,q){if(!q)return esc(text);const re=new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'gi');return esc(text).replace(re,'<span class="hl">$1</span>')}
 
 // ── Advanced Reusable Paged Table Maker ──
@@ -96,7 +96,7 @@ function makePagedTable(containerId, items, columns, renderRowFn, filterFn, page
     const start = page * pageSize;
     const slice = filtered.slice(start, start + pageSize);
 
-    let h = `<table class="custom-table"><thead><tr>`;
+    let h = `<table><thead><tr>`;
     columns.forEach(col => {
       const arrow = sortBy === col.key ? (sortAsc ? ' ▴' : ' ▾') : '';
       h += `<th style="${col.style || ''}" onclick="_tblSort(${id}, '${col.key}')">${col.label}${arrow}</th>`;
@@ -113,7 +113,7 @@ function makePagedTable(containerId, items, columns, renderRowFn, filterFn, page
     h += `</tbody></table>`;
 
     // Pagination
-    h += `<div class="table-footer-bar">`;
+    h += `<div class="tbl-foot">`;
     h += `<span>Showing ${total === 0 ? 0 : start + 1}–${Math.min(start + pageSize, total)} of ${total} entries</span>`;
     if (pages > 1) {
       h += `<div style="display:flex;gap:4px;">`;
@@ -166,7 +166,7 @@ async function loadExplorer() {
 function renderTargets(targets) {
   const el = document.getElementById('targets-container');
   if (!targets.length) {
-    el.innerHTML = '<div class="empty-placeholder">No targets found. Run a scan to register your first project.</div>';
+    el.innerHTML = '<div class="empty">No targets found. Run a scan to register your first project.</div>';
     return;
   }
   let h = '';
@@ -176,21 +176,21 @@ function renderTargets(targets) {
     const mon = t.monitor_enabled;
 
     h += `<div class="target-card" onclick="openTarget('${esc(t.name)}')">`;
-    h += `<div class="target-card-domain">${esc(t.domain || t.name)}</div>`;
-    h += `<div class="target-card-stats">`;
-    if (date) h += `<span class="stat">Scanned: <b>${date}</b></span>`;
-    if (s.total_subdomains) h += `<span class="stat">Subs: <b>${s.total_subdomains}</b></span>`;
-    if (s.alive_services) h += `<span class="stat">Alive: <b>${s.alive_services}</b></span>`;
-    if (s.open_ports) h += `<span class="stat">Ports: <b>${s.open_ports}</b></span>`;
-    if (s.dork_findings) h += `<span class="stat">Dorks: <b style="color:var(--accent)">${s.dork_findings}</b></span>`;
-    h += `</div>`;
-    h += `<div class="target-card-actions">`;
-    h += `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation(); openTarget('${esc(t.name)}')">Open</button>`;
-    h += `<label class="toolbar-checkbox-label" onclick="event.stopPropagation()">`;
+    h += `<div class="tc-info">`;
+    h += `<div class="tc-domain">${esc(t.domain || t.name)}</div>`;
+    h += `<div class="tc-stats">`;
+    if (date) h += `<span>Scanned: <b>${date}</b></span>`;
+    if (s.total_subdomains) h += `<span>Subs: <b>${s.total_subdomains}</b></span>`;
+    if (s.alive_services) h += `<span>Alive: <b>${s.alive_services}</b></span>`;
+    if (s.open_ports) h += `<span>Ports: <b>${s.open_ports}</b></span>`;
+    if (s.dork_findings) h += `<span>Dorks: <b style="color:var(--accent)">${s.dork_findings}</b></span>`;
+    h += `</div></div>`;
+    h += `<div class="tc-actions">`;
+    h += `<button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); openTarget('${esc(t.name)}')">Open</button>`;
+    h += `<label class="chk-label" onclick="event.stopPropagation()">`;
     h += `<input type="checkbox" ${mon ? 'checked' : ''} onchange="event.stopPropagation(); toggleMonitor('${esc(t.name)}', this.checked)"/> Monitor`;
     h += `</label>`;
-    h += `</div>`;
-    h += `</div>`;
+    h += `</div></div>`;
   }
   el.innerHTML = h;
 }
@@ -210,11 +210,11 @@ window.showExplorer = function() {
 // ── Target Switch View ──
 window.switchView = function(viewId) {
   currentView = viewId;
-  document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-  document.getElementById('nav-' + viewId)?.classList.add('active');
+  document.querySelectorAll('.sidebar-nav li').forEach(item => item.classList.remove('on'));
+  document.getElementById('nav-' + viewId)?.classList.add('on');
 
-  document.querySelectorAll('.content-area > .view-section').forEach(sec => sec.classList.remove('active'));
-  document.getElementById('view-' + viewId)?.classList.add('active');
+  document.querySelectorAll('.content > .view').forEach(sec => sec.classList.remove('on'));
+  document.getElementById('view-' + viewId)?.classList.add('on');
 
   if (viewId === 'overview') {
     renderOverview();
@@ -234,6 +234,8 @@ window.switchView = function(viewId) {
     loadPortsSection();
   } else if (viewId === 'dorks') {
     loadDorksSection();
+  } else if (viewId === 'diff') {
+    loadDiffSection();
   } else if (viewId === 'monitor') {
     loadMonitor();
   } else if (viewId === 'logs') {
@@ -247,8 +249,8 @@ window.switchView = function(viewId) {
 function switchSectionSubTab(secId, tabKey) {
   const container = document.getElementById('view-' + secId);
   if (!container) return;
-  container.querySelectorAll('.section-tab-btn').forEach(btn => btn.classList.remove('active'));
-  container.querySelector(`#tab-${secId}-${tabKey}`)?.classList.add('active');
+  container.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('on'));
+  container.querySelector(`#tab-${secId}-${tabKey}`)?.classList.add('on');
 
   if (secId === 'assets') {
     assetsActiveTab = tabKey;
@@ -322,9 +324,9 @@ function renderOverview() {
 
   let h = '';
   items.forEach(it => {
-    h += `<div class="overview-stat-box ${it.val > 0 ? 'has-data' : ''}" onclick="switchView('${it.key}')">`;
-    h += `<div class="overview-stat-val">${it.val.toLocaleString()}</div>`;
-    h += `<div class="overview-stat-lbl">${it.label}</div>`;
+    h += `<div class="stat-box" onclick="switchView('${it.key}')">`;
+    h += `<div class="stat-val">${it.val.toLocaleString()}</div>`;
+    h += `<div class="stat-lbl">${it.label}</div>`;
     h += `</div>`;
   });
   el.innerHTML = h;
@@ -337,7 +339,7 @@ function renderOverview() {
     .slice(0, 8);
 
   if (interesting.length === 0) {
-    topAssetsContainer.innerHTML = '<div class="empty-placeholder">No high priority triage assets found.</div>';
+    topAssetsContainer.innerHTML = '<div class="empty">No high priority triage assets found.</div>';
   } else {
     let ah = '';
     interesting.forEach(item => {
@@ -390,7 +392,7 @@ async function loadOverviewMonitorSummary() {
   const data = await fetchJSON(`/api/monitor/changes?target=${currentTarget}`);
   const changes = data?.changes || [];
   if (changes.length === 0) {
-    container.innerHTML = '<div class="empty-placeholder">No monitor changes logged.</div>';
+    container.innerHTML = '<div class="empty">No monitor changes logged.</div>';
     return;
   }
   const latest = changes[0];
@@ -740,7 +742,7 @@ function renderTriageList() {
   }
 
   if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-placeholder">No hunt queue items matching current filters.</div>';
+    container.innerHTML = '<div class="empty">No hunt queue items matching current filters.</div>';
     return;
   }
 
@@ -786,8 +788,8 @@ function renderTriageList() {
 
 window.filterTriagePriority = (prio) => {
   triagePriorityFilter = prio;
-  document.querySelectorAll('.triage-filters button').forEach(btn => btn.classList.remove('btn-primary'));
-  document.getElementById('btn-triage-' + prio)?.classList.add('btn-primary');
+  document.querySelectorAll('.triage-bar button').forEach(btn => btn.classList.remove('btn-accent'));
+  document.getElementById('btn-triage-' + prio)?.classList.add('btn-accent');
   renderTriageList();
 };
 
@@ -986,7 +988,7 @@ async function loadScreenshots() {
   document.getElementById('badge-screenshots').textContent = files.length;
 
   if (files.length === 0) {
-    container.innerHTML = '<div class="empty-placeholder">No screenshots collected.</div>';
+    container.innerHTML = '<div class="empty">No screenshots collected.</div>';
     return;
   }
 
@@ -1027,7 +1029,7 @@ async function fetchAndRenderHistorical() {
 
   const res = await fetchJSON(`/api/data/historical?${qs.toString()}`);
   if (!res) {
-    container.innerHTML = '<div class="empty-placeholder">Error fetching data.</div>';
+    container.innerHTML = '<div class="empty">Error fetching data.</div>';
     return;
   }
 
@@ -1363,7 +1365,7 @@ async function loadRawFilesSection() {
   rawFilesList = res?.files || [];
 
   if (rawFilesList.length === 0) {
-    indexContainer.innerHTML = '<div class="empty-placeholder">No raw files detected.</div>';
+    indexContainer.innerHTML = '<div class="empty">No raw files detected.</div>';
     return;
   }
 
@@ -1410,7 +1412,7 @@ async function loadMonitor() {
   summaryContainer.innerHTML = sh;
 
   if (changes.length === 0) {
-    container.innerHTML = '<div class="empty-placeholder">No monitor history changes logged. Run a monitor check first.</div>';
+    container.innerHTML = '<div class="empty">No monitor history changes logged. Run a monitor check first.</div>';
     return;
   }
 
@@ -1489,7 +1491,7 @@ window.closeScanModal = () => {
 };
 
 window.openScanLog = () => {
-  document.getElementById('scan-log').classList.add('visible');
+  document.getElementById('scan-log').classList.add('vis');
 };
 
 window.openLightbox = (src, label) => {
@@ -1517,7 +1519,7 @@ window.startScan = async function() {
   const res = await postJSON('/api/scan/start', { domain, skip, threads, rate, top_ports });
   if (res?.ok) {
     document.getElementById('start-scan-btn').disabled = true;
-    document.getElementById('scan-log').classList.add('visible');
+    document.getElementById('scan-log').classList.add('vis');
     pollScanLog();
   } else {
     alert(res?.message || 'Failed to start scan');
@@ -1577,7 +1579,7 @@ function pollScanLog() {
 function updateScanBar(s) {
   const bar = document.getElementById('scan-bar');
   if (s.running) {
-    bar.classList.add('visible');
+    bar.classList.add('vis');
     const elapsed = s.elapsed ? `${Math.floor(s.elapsed/60)}m ${s.elapsed%60}s` : '';
     const stepText = s.current_step ? ` [Step: ${s.current_step}]` : '';
     document.getElementById('scan-bar-text').textContent = `Active scan running for ${s.domain || ''}... ${elapsed}${stepText}`;
@@ -1587,7 +1589,7 @@ function updateScanBar(s) {
       progressEl.style.width = `${s.progress_percent || 0}%`;
     }
   } else {
-    bar.classList.remove('visible');
+    bar.classList.remove('vis');
   }
 }
 
@@ -1667,7 +1669,7 @@ window.submitMonitorModal = async () => {
   const res = await postJSON('/api/monitor/start', { domain, target: domain, init });
   if (res?.ok) {
     openScanModal();
-    document.getElementById('scan-log').classList.add('visible');
+    document.getElementById('scan-log').classList.add('vis');
     pollScanLog();
   } else {
     alert(res?.message || 'Failed to start monitor check.');
@@ -1685,7 +1687,7 @@ window.runMonitorScan = async () => {
   const res = await postJSON('/api/monitor/start', { domain, target: currentTarget, init });
   if (res?.ok) {
     openScanModal();
-    document.getElementById('scan-log').classList.add('visible');
+    document.getElementById('scan-log').classList.add('vis');
     pollScanLog();
   } else {
     alert(res?.message || 'Failed to start monitor check.');
@@ -1694,17 +1696,17 @@ window.runMonitorScan = async () => {
 
 // ── Mobile Sidebar ──
 window.openSidebar = () => {
-  document.getElementById('sidebar').classList.add('mobile-open');
-  document.getElementById('sidebar-overlay').classList.add('active');
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('on');
 };
 
 window.closeSidebar = () => {
-  document.getElementById('sidebar').classList.remove('mobile-open');
-  document.getElementById('sidebar-overlay').classList.remove('active');
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('on');
 };
 
 // Close sidebar when nav item is clicked on mobile
-document.querySelectorAll('.nav-item button').forEach(btn => {
+document.querySelectorAll('.sidebar-nav button').forEach(btn => {
   btn.addEventListener('click', () => {
     if (window.innerWidth <= 768) closeSidebar();
   });
@@ -1713,10 +1715,9 @@ document.querySelectorAll('.nav-item button').forEach(btn => {
 // ── Log Search/Filter ──
 window.filterLogContent = (query) => {
   const consoleEl = document.getElementById('logs-scan-log');
-  if (!consoleEl || !query) return;
-  // Simple highlight approach: store original text and highlight matches
+  if (!consoleEl) return;
   const text = consoleEl.textContent;
-  if (!query.trim()) {
+  if (!query || !query.trim()) {
     consoleEl.innerHTML = '';
     consoleEl.textContent = text;
     return;
@@ -1724,6 +1725,138 @@ window.filterLogContent = (query) => {
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(${escaped})`, 'gi');
   consoleEl.innerHTML = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(re, '<span class="hl">$1</span>');
+};
+
+// ── Diff Matrix Section ──
+async function loadDiffSection() {
+  if (!currentTarget) return;
+  const selA = document.getElementById('diff-scan-a');
+  const selB = document.getElementById('diff-scan-b');
+
+  const data = await fetchJSON(`/api/scans?target=${currentTarget}`);
+  const scans = data?.scans || [];
+  
+  if (scans.length === 0) {
+    selA.innerHTML = '<option value="">No scans found</option>';
+    selB.innerHTML = '<option value="">No scans found</option>';
+    document.getElementById('diff-results').innerHTML = '<div class="empty">No scan data ingested yet. Run a scan or trigger manual ingest first.</div>';
+    return;
+  }
+
+  let opts = '<option value="">Select scan...</option>';
+  scans.forEach(s => {
+    const label = s.timestamp ? new Date(s.timestamp).toLocaleString() : `Scan #${s.id}`;
+    opts += `<option value="${s.id}">${esc(label)} (${esc(s.domain || '')})</option>`;
+  });
+  selA.innerHTML = opts;
+  selB.innerHTML = opts;
+}
+
+window.runDiff = async function() {
+  const scanA = document.getElementById('diff-scan-a').value;
+  const scanB = document.getElementById('diff-scan-b').value;
+  const resultsEl = document.getElementById('diff-results');
+
+  if (!scanA || !scanB) {
+    resultsEl.innerHTML = '<div class="empty">Please select both scans to compare.</div>';
+    return;
+  }
+  if (scanA === scanB) {
+    resultsEl.innerHTML = '<div class="empty">Select two different scans to compare.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+  const diff = await fetchJSON(`/api/diff?target=${currentTarget}&scan_a=${scanA}&scan_b=${scanB}`);
+  if (!diff || diff.error) {
+    resultsEl.innerHTML = `<div class="empty">${diff?.error || 'Failed to load diff.'}</div>`;
+    return;
+  }
+
+  let h = '';
+
+  // Summary cards
+  const sections = [
+    { key: 'subdomains', label: 'Subdomains' },
+    { key: 'ports', label: 'Ports' },
+    { key: 'web_apps', label: 'Web Apps' }
+  ];
+
+  h += '<div class="diff-summary">';
+  for (const sec of sections) {
+    const d = diff[sec.key] || {};
+    const added = (d.added || []).length;
+    const removed = (d.removed || []).length;
+    h += `<div class="diff-stat"><div class="diff-stat-val" style="color:var(--green);">+${added}</div><div class="diff-stat-lbl">${sec.label} Added</div></div>`;
+    h += `<div class="diff-stat"><div class="diff-stat-val" style="color:var(--red);">-${removed}</div><div class="diff-stat-lbl">${sec.label} Removed</div></div>`;
+  }
+  if (diff.web_apps?.status_changed) {
+    h += `<div class="diff-stat"><div class="diff-stat-val" style="color:var(--amber);">${diff.web_apps.status_changed.length}</div><div class="diff-stat-lbl">Status Changed</div></div>`;
+  }
+  h += '</div>';
+
+  // Detail sections
+  for (const sec of sections) {
+    const d = diff[sec.key] || {};
+    if ((d.added?.length || 0) + (d.removed?.length || 0) === 0) continue;
+    
+    h += `<div class="diff-section"><h4>${sec.label}</h4>`;
+    (d.added || []).forEach(item => {
+      const val = typeof item === 'string' ? item : item.url || item.hostname || JSON.stringify(item);
+      h += `<div class="diff-added">${esc(val)}</div>`;
+    });
+    (d.removed || []).forEach(item => {
+      const val = typeof item === 'string' ? item : item.url || item.hostname || JSON.stringify(item);
+      h += `<div class="diff-removed">${esc(val)}</div>`;
+    });
+    h += '</div>';
+  }
+
+  // Status changes
+  if (diff.web_apps?.status_changed?.length) {
+    h += '<div class="diff-section"><h4>Status Code Changes</h4>';
+    diff.web_apps.status_changed.forEach(item => {
+      h += `<div style="font-family:var(--mono);font-size:11px;padding:3px 0;color:var(--fg-2);">${esc(item.url)} <span style="color:var(--red)">${item.old_status}</span> → <span style="color:var(--green)">${item.new_status}</span></div>`;
+    });
+    h += '</div>';
+  }
+
+  if (!h.trim()) h = '<div class="empty">No differences found between selected scans.</div>';
+  resultsEl.innerHTML = h;
+};
+
+// ── Scope Loader (for scan modal) ──
+async function loadScopeRules() {
+  const data = await fetchJSON('/api/scope');
+  if (!data?.rules) return;
+  const inEl = document.getElementById('scope-in');
+  const outEl = document.getElementById('scope-out');
+  if (inEl) inEl.value = (data.rules.in_scope || []).join('\n');
+  if (outEl) outEl.value = (data.rules.out_of_scope || []).join('\n');
+}
+
+async function saveScopeRules() {
+  const inVal = (document.getElementById('scope-in')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  const outVal = (document.getElementById('scope-out')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+  await postJSON('/api/scope', {
+    global_rules: { in_scope: inVal, out_of_scope: outVal },
+    target_overrides: {}
+  });
+}
+
+// Override openScanModal to also load scope rules
+const _origOpenScanModal = window.openScanModal;
+window.openScanModal = function() {
+  _origOpenScanModal();
+  loadScopeRules();
+};
+
+// Override startScan to also save scope before starting
+const _origStartScan = window.startScan;
+window.startScan = async function() {
+  await saveScopeRules();
+  _origStartScan();
 };
 
 // Initialize

@@ -27,6 +27,13 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import unquote, parse_qs, urlparse
 
+from db import ReconDB
+
+def get_target_db(target_dir):
+    db_path = Path(target_dir) / 'recon.db'
+    db = ReconDB(str(db_path))
+    return db
+
 SCRIPT_DIR = Path(__file__).resolve().parent
 DASHBOARD_HTML = SCRIPT_DIR / "dashboard.html"
 DASHBOARD_JS = SCRIPT_DIR / "dashboard.js"
@@ -156,7 +163,22 @@ class ScanManager:
                 pass
         if running and self.started_at:
             result["elapsed"] = int(time.time() - self.started_at)
+        elif not running and self.finished:
+            self._check_auto_ingest()
         return result
+
+    def _check_auto_ingest(self):
+        """Called from status() when scan finishes. Ingests flat files into SQLite."""
+        if self.finished and self.domain and not getattr(self, '_ingested', False):
+            self._ingested = True
+            target_dir = self.projects_dir / self.domain
+            if target_dir.is_dir():
+                try:
+                    db = get_target_db(target_dir)
+                    db.ingest_scan(str(target_dir))
+                    db.close()
+                except Exception as e:
+                    sys.stderr.write(f"Auto-ingest failed: {e}\n")
 
 
 # ── Monitor config persistence ───────────────────────────────────────────────
@@ -374,8 +396,73 @@ class HistoricalIndex:
 
 historical_index = HistoricalIndex()
 
+class ScopeEngine:
+    def __init__(self, projects_dir):
+        self.config_path = Path(projects_dir) / '.scope_config.json'
+        self.rules = self.load_rules()
+    
+    def load_rules(self):
+        if self.config_path.exists():
+            try:
+                with open(self.config_path) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {'global_rules': {'in_scope': [], 'out_of_scope': []}, 'target_overrides': {}}
+    
+    def save_rules(self, rules):
+        self.rules = rules
+        with open(self.config_path, 'w') as f:
+            json.dump(rules, f, indent=2)
+    
+    def get_rules(self, target=None):
+        base = dict(self.rules.get('global_rules', {}))
+        if target and target in self.rules.get('target_overrides', {}):
+            override = self.rules['target_overrides'][target]
+            base['in_scope'] = override.get('in_scope', base.get('in_scope', []))
+            base['out_of_scope'] = override.get('out_of_scope', base.get('out_of_scope', []))
+        return base
+    
+    def is_in_scope(self, hostname, target=None):
+        import fnmatch, ipaddress
+        rules = self.get_rules(target)
+        in_scope = rules.get('in_scope', [])
+        out_of_scope = rules.get('out_of_scope', [])
+        
+        if not in_scope:
+            allowed = True
+        else:
+            allowed = False
+            for pattern in in_scope:
+                if '/' in pattern:
+                    try:
+                        if ipaddress.ip_address(hostname) in ipaddress.ip_network(pattern, strict=False):
+                            allowed = True
+                            break
+                    except ValueError:
+                        pass
+                elif fnmatch.fnmatch(hostname.lower(), pattern.lower()):
+                    allowed = True
+                    break
+        
+        if not allowed:
+            return False
+        
+        for pattern in out_of_scope:
+            if '/' in pattern:
+                try:
+                    if ipaddress.ip_address(hostname) in ipaddress.ip_network(pattern, strict=False):
+                        return False
+                except ValueError:
+                    pass
+            elif fnmatch.fnmatch(hostname.lower(), pattern.lower()):
+                return False
+        
+        return True
+
 def make_handler(projects_dir, scan_manager):
     projects_path = Path(projects_dir).resolve()
+    scope_engine = ScopeEngine(projects_dir)
 
     class DashboardHandler(SimpleHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -791,6 +878,74 @@ def make_handler(projects_dir, scan_manager):
                 self.send_json(result)
                 return
 
+            # ─── API: List scans for a target ───
+            if path == '/api/scans':
+                target = qs.get('target', [None])[0]
+                if not target:
+                    self.send_json({'error': 'target param required'}, 400)
+                    return
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({'error': 'Target not found'}, 404)
+                    return
+                try:
+                    db = get_target_db(target_dir)
+                    scans = db.get_scans()
+                    db.close()
+                    self.send_json({'scans': scans})
+                except Exception as e:
+                    self.send_json({'scans': [], 'error': str(e)})
+                return
+
+            # ─── API: Diff between two scans ───
+            if path == '/api/diff':
+                target = qs.get('target', [None])[0]
+                scan_a = qs.get('scan_a', [None])[0]
+                scan_b = qs.get('scan_b', [None])[0]
+                if not target or not scan_a or not scan_b:
+                    self.send_json({'error': 'target, scan_a, scan_b params required'}, 400)
+                    return
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({'error': 'Target not found'}, 404)
+                    return
+                try:
+                    db = get_target_db(target_dir)
+                    diff = db.get_diff(int(scan_a), int(scan_b))
+                    db.close()
+                    self.send_json(diff)
+                except Exception as e:
+                    self.send_json({'error': str(e)}, 500)
+                return
+
+            # ─── API: Scope rules ───
+            if path == '/api/scope':
+                target = qs.get('target', [None])[0]
+                rules = scope_engine.get_rules(target)
+                self.send_json({'rules': rules, 'all_rules': scope_engine.rules})
+                return
+
+            # ─── API: System health ───
+            if path == '/api/system/health':
+                health = {'cpu_load': 0, 'memory_percent': 0}
+                try:
+                    with open('/proc/loadavg') as f:
+                        parts = f.read().split()
+                        health['cpu_load'] = float(parts[0])
+                    with open('/proc/meminfo') as f:
+                        info = {}
+                        for line in f:
+                            k, v = line.split(':')[:2]
+                            info[k.strip()] = int(v.split()[0])
+                        total = info.get('MemTotal', 1)
+                        available = info.get('MemAvailable', total)
+                        health['memory_percent'] = round((1 - available / total) * 100, 1)
+                except Exception:
+                    pass
+                health['scan_running'] = scan_manager.is_running()
+                self.send_json(health)
+                return
+
             # ─── Fallback ───
             self.send_json({"error": "Not found"}, 404)
 
@@ -804,6 +959,9 @@ def make_handler(projects_dir, scan_manager):
                 domain = body.get("domain", "").strip()
                 if not domain:
                     self.send_json({"error": "domain is required"}, 400)
+                    return
+                if not scope_engine.is_in_scope(domain, domain):
+                    self.send_json({'ok': False, 'message': f'Domain "{domain}" is out of scope. Update scope rules to allow it.'}, 403)
                     return
                 skip = body.get("skip", [])
                 threads = body.get("threads")
@@ -876,6 +1034,33 @@ def make_handler(projects_dir, scan_manager):
             if path == "/api/monitor/config":
                 cfg = load_monitor_config(projects_path)
                 self.send_json(cfg)
+                return
+
+            # ─── API: Update scope rules ───
+            if path == '/api/scope':
+                body = self.read_body()
+                scope_engine.save_rules(body)
+                self.send_json({'ok': True})
+                return
+
+            # ─── API: Trigger manual DB ingest ───
+            if path == '/api/db/ingest':
+                body = self.read_body()
+                target = body.get('target', '').strip()
+                if not target:
+                    self.send_json({'error': 'target is required'}, 400)
+                    return
+                target_dir = self.resolve_target_path(target)
+                if not target_dir or not target_dir.is_dir():
+                    self.send_json({'error': 'Target not found'}, 404)
+                    return
+                try:
+                    db = get_target_db(target_dir)
+                    scan_id = db.ingest_scan(str(target_dir))
+                    db.close()
+                    self.send_json({'ok': True, 'scan_id': scan_id})
+                except Exception as e:
+                    self.send_json({'ok': False, 'error': str(e)}, 500)
                 return
 
             self.send_json({"error": "Not found"}, 404)

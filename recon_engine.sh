@@ -52,6 +52,7 @@ source "$MODULES_DIR/validate_historical.sh"   # Module: Optional Historical URL
 source "$MODULES_DIR/infra.sh"        # Module 9: Infrastructure Mapping
 source "$MODULES_DIR/report.sh"       # Module 10: Report Generation
 source "$MODULES_DIR/notify.sh"       # Discord notifications
+source "$MODULES_DIR/rate_guard.sh"   # Adaptive rate limiting
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI Usage
@@ -212,21 +213,34 @@ main() {
 
     check_dependencies || exit 1
 
+    # Initialize adaptive rate guard
+    rate_guard_init
+
     local start_time
     start_time=$(date +%s)
 
     # ═══ PIPELINE ═══
+    rate_guard_check
     module_subdomain_discovery      # 1. Discover subdomains
+    rate_guard_check
     module_dns_resolution           # 2. Resolve DNS
+    rate_guard_check
     module_http_probing             # 3. Probe HTTP services
+    rate_guard_check
     module_screenshots              # 4. Capture screenshots
+    rate_guard_check
     module_port_scanning            # 5. Scan ports
+    rate_guard_check
     module_js_deep                  # 6. Deep JS Analysis
     handle_recursion                #    (recursive JS discovery)
+    rate_guard_check
     module_historical               # 7. Historical URLs
+    rate_guard_check
     module_crawl_endpoints          # 8. Crawl endpoints
+    rate_guard_check
     module_dorks                    #    Dork-style sensitive file discovery
     module_validate_historical      #    Optional Historical URL validation
+    rate_guard_check
     module_infra_mapping            # 9. Map infrastructure
     module_report                   # 10. Generate reports
 

@@ -2,1875 +2,1410 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>404Plyh — Recon Triage Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>404Plyh — Recon Triage Center</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
-*, *::before, *::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* ────── Reset ────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ────── Design Tokens ────── */
+:root {
+  --bg-0: #0a0a0c;
+  --bg-1: #111114;
+  --bg-2: #18181c;
+  --bg-3: #1f1f25;
+  --border-0: #232329;
+  --border-1: #2e2e36;
+  --border-2: #3a3a44;
+  --fg-0: #fafafa;
+  --fg-1: #d4d4d8;
+  --fg-2: #a1a1aa;
+  --fg-3: #71717a;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-bg: rgba(99, 102, 241, 0.08);
+  --accent-border: rgba(99, 102, 241, 0.20);
+  --accent-glow: rgba(99, 102, 241, 0.15);
+  --green: #22c55e;
+  --green-bg: rgba(34, 197, 94, 0.08);
+  --red: #ef4444;
+  --red-bg: rgba(239, 68, 68, 0.08);
+  --amber: #f59e0b;
+  --amber-bg: rgba(245, 158, 11, 0.08);
+  --blue: #3b82f6;
+  --blue-bg: rgba(59, 130, 246, 0.08);
+  --mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --radius: 6px;
+  --radius-lg: 10px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-:root {
-  --bg: #09090b;
-  --bg-raised: #0f0f12;
-  --panel: #131316;
-  --panel-hover: #1a1a1f;
-  --border: #1e1e24;
-  --border-h: #2a2a33;
-  --border-focus: #3f3f4a;
-  --fg: #e4e4e7;
-  --fg-dim: #a1a1aa;
-  --muted: #71717a;
-  --accent: #6366f1;
-  --accent-dim: rgba(99, 102, 241, 0.12);
-  --accent-glow: rgba(99, 102, 241, 0.25);
-  --good: #10b981;
-  --good-dim: rgba(16, 185, 129, 0.12);
-  --danger: #ef4444;
-  --danger-dim: rgba(239, 68, 68, 0.12);
-  --warning: #f59e0b;
-  --warning-dim: rgba(245, 158, 11, 0.12);
-  --blue: #3b82f6;
-  --blue-dim: rgba(59, 130, 246, 0.12);
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --r: 8px;
-  --r-lg: 12px;
-  --tr: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
-  --glass: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.06);
-}
+html { height: 100%; }
 
 body {
-  font-family: var(--font-sans);
-  background: var(--bg);
-  color: var(--fg);
-  line-height: 1.5;
-  min-height: 100vh;
-  display: flex;
-  overflow: hidden;
+  font-family: var(--sans);
+  background: var(--bg-0);
+  color: var(--fg-1);
   font-size: 13px;
+  line-height: 1.5;
+  height: 100%;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── App Layout ── */
-.app-container {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-}
+/* ────── Layout Shell ────── */
+.shell { display: flex; height: 100%; width: 100%; }
 
-/* ── Sidebar ── */
+/* ────── Sidebar ────── */
 .sidebar {
-  width: 260px;
-  background: var(--panel);
-  border-right: 1px solid var(--border);
+  width: 220px;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border-0);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  height: 100%;
   z-index: 50;
-  transition: transform 0.3s ease;
 }
 
-.sidebar-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
+.sidebar-brand {
+  height: 52px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 16px;
-  color: #fff;
-  letter-spacing: -0.03em;
-  display: flex;
-  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-0);
   gap: 3px;
+  flex-shrink: 0;
 }
 
-.logo span {
-  background: linear-gradient(135deg, var(--accent), #818cf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.sidebar-brand .logo {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--fg-0);
 }
 
-.sidebar-close {
+.sidebar-brand .logo em {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.sidebar-brand .close-btn {
   display: none;
+  margin-left: auto;
   background: none;
   border: none;
-  color: var(--muted);
+  color: var(--fg-3);
   font-size: 20px;
   cursor: pointer;
-  padding: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius);
 }
 
-.target-select-container {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-}
+.sidebar-brand .close-btn:hover { color: var(--fg-0); background: var(--bg-3); }
 
-.btn-back-explorer {
-  width: 100%;
-  text-align: left;
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  color: var(--fg-dim);
-  padding: 10px 14px;
-  border-radius: var(--r);
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
+.sidebar-back {
+  margin: 12px 10px 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  color: var(--fg-3);
+  font-family: var(--sans);
+  font-size: 11px;
   font-weight: 500;
-  transition: var(--tr);
+  cursor: pointer;
+  text-align: left;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  transition: all 0.15s var(--ease);
 }
 
-.btn-back-explorer:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--border-h);
-  color: var(--fg);
-}
+.sidebar-back:hover { color: var(--fg-1); border-color: var(--border-1); }
 
-.btn-back-explorer svg {
-  width: 14px;
-  height: 14px;
-  opacity: 0.6;
-}
+.sidebar-back svg { width: 12px; height: 12px; flex-shrink: 0; }
 
-.nav-list {
+.sidebar-nav {
   list-style: none;
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  padding: 8px;
   overflow-y: auto;
   flex-grow: 1;
 }
 
-.nav-item button {
+.sidebar-nav li { margin-bottom: 1px; }
+
+.sidebar-nav button {
   width: 100%;
   background: none;
   border: none;
-  color: var(--muted);
+  color: var(--fg-3);
   text-align: left;
-  padding: 10px 14px;
-  border-radius: var(--r);
+  padding: 8px 12px;
+  border-radius: var(--radius);
   cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
+  font-family: var(--sans);
+  font-size: 12px;
   font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: var(--tr);
-  position: relative;
+  transition: all 0.12s var(--ease);
 }
 
-.nav-item button:hover {
-  background: var(--glass);
-  color: var(--fg-dim);
-}
+.sidebar-nav button:hover { background: var(--bg-2); color: var(--fg-2); }
 
-.nav-item.active button {
-  background: var(--accent-dim);
+.sidebar-nav li.on button {
+  background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
 }
 
-.nav-item.active button::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 60%;
-  background: var(--accent);
-  border-radius: 0 2px 2px 0;
-}
-
-.nav-badge {
-  font-family: var(--font-mono);
+.badge {
+  font-family: var(--mono);
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
-  padding: 2px 7px;
-  border-radius: 10px;
   font-weight: 600;
-  min-width: 22px;
+  background: var(--bg-3);
+  color: var(--fg-3);
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 20px;
   text-align: center;
 }
 
-.nav-item.active .nav-badge {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
+.sidebar-nav li.on .badge { background: var(--accent-bg); color: var(--accent); }
 
-/* ── Hamburger Button (Mobile) ── */
-.hamburger-btn {
-  display: none;
-  background: none;
-  border: none;
-  color: var(--fg);
-  font-size: 22px;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: var(--r);
-}
+/* ────── Main Area ────── */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 
-.hamburger-btn:hover {
-  background: var(--glass);
-}
-
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 40;
-  backdrop-filter: blur(4px);
-}
-
-/* ── Main Panel ── */
-.main-panel {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-/* ── Top Bar ── */
+/* ── Topbar ── */
 .topbar {
-  height: 56px;
-  border-bottom: 1px solid var(--border);
-  padding: 0 1.5rem;
+  height: 52px;
+  border-bottom: 1px solid var(--border-0);
+  padding: 0 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: var(--bg-1);
   flex-shrink: 0;
-  background: var(--panel);
   gap: 12px;
 }
 
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+.topbar-l { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.topbar-r { display: flex; gap: 6px; flex-shrink: 0; }
+
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--fg-1);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: var(--radius);
 }
 
-.topbar-title {
-  font-family: var(--font-mono);
-  font-size: 14px;
+.hamburger:hover { background: var(--bg-3); }
+
+.topbar-domain {
+  font-family: var(--mono);
   font-weight: 600;
+  font-size: 13px;
+  color: var(--fg-0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .topbar-meta {
-  font-size: 12px;
-  color: var(--muted);
-  display: flex;
-  gap: 1rem;
+  font-size: 11px;
+  color: var(--fg-3);
   white-space: nowrap;
 }
 
-.topbar-meta span b { color: var(--fg-dim); }
+.topbar-meta b { color: var(--fg-2); }
 
-.topbar-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
+/* ── Content ── */
+.content { flex: 1; overflow-y: auto; padding: 20px; }
 
-/* ── Content Viewports ── */
-.content-area {
-  flex-grow: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
-  position: relative;
-}
+.view { display: none; animation: viewIn 0.15s var(--ease); }
+.view.on { display: block; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-.view-section {
-  display: none;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.view-section.active { display: block; }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Buttons ── */
+/* ────── Buttons ────── */
 .btn {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--fg-dim);
-  padding: 8px 16px;
-  border-radius: var(--r);
-  font-size: 12px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--tr);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  color: var(--fg-2);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+  white-space: nowrap;
   text-decoration: none;
+}
+
+.btn:hover { border-color: var(--border-1); color: var(--fg-1); background: var(--bg-3); }
+
+.btn-accent {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-accent:hover { background: var(--accent-hover); border-color: transparent; }
+
+.btn-red { color: var(--red); border-color: rgba(239,68,68,0.2); }
+.btn-red:hover { background: var(--red-bg); }
+
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+
+/* ────── Inputs ────── */
+.input {
+  height: 36px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  color: var(--fg-1);
+  font-family: var(--sans);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s var(--ease), box-shadow 0.15s var(--ease);
+}
+
+.input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+.select {
+  height: 36px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 0 12px;
+  color: var(--fg-1);
+  font-family: var(--sans);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.chk-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--fg-3);
+  cursor: pointer;
+  user-select: none;
   white-space: nowrap;
 }
 
-.btn:hover {
-  border-color: var(--border-h);
-  background: var(--panel-hover);
-  color: var(--fg);
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border-color: transparent;
-  font-weight: 600;
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-.btn-primary:hover {
-  background: #818cf8;
-  border-color: transparent;
-  box-shadow: 0 0 20px var(--accent-glow);
-}
-
-.btn-danger {
-  border-color: rgba(239, 68, 68, 0.3);
-  color: var(--danger);
-}
-
-.btn-danger:hover {
-  background: var(--danger-dim);
-}
-
-.btn-sm {
-  padding: 5px 10px;
-  font-size: 11px;
-  border-radius: 6px;
-}
-
-.btn-star { color: var(--muted); }
-.btn-star.active { color: var(--warning) !important; }
-.btn-ignore { color: var(--muted); }
-.btn-ignore.active { color: var(--danger) !important; opacity: 0.5; }
-
-/* ── Explorer Target Screen ── */
-.explorer-screen {
+/* ────── Explorer Screen ────── */
+.explorer {
   position: fixed;
   inset: 0;
-  background: var(--bg);
+  background: var(--bg-0);
   z-index: 100;
   overflow-y: auto;
-  padding: 3rem 1.5rem;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
 }
 
-.explorer-content {
-  width: 100%;
-  max-width: 960px;
-}
+.explorer-inner { width: 100%; max-width: 880px; }
 
-.explorer-header {
+.explorer-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 12px;
 }
 
-.explorer-header h1 {
-  font-family: var(--font-mono);
-  font-size: 22px;
+.explorer-top h1 {
+  font-family: var(--mono);
   font-weight: 700;
+  font-size: 20px;
+  color: var(--fg-0);
 }
 
-.explorer-header h1 span {
-  background: linear-gradient(135deg, var(--accent), #818cf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+.explorer-top h1 em { font-style: normal; color: var(--accent); }
 
-/* ── Targets Grid ── */
 .targets-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .target-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 1.25rem;
-  cursor: pointer;
-  transition: var(--tr);
-  position: relative;
-  overflow: hidden;
-}
-
-.target-card:hover {
-  border-color: var(--border-h);
-  background: var(--panel-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
-}
-
-.target-card-domain {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 8px;
-}
-
-.target-card-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.target-card-stats .stat {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.target-card-stats .stat b {
-  color: var(--fg-dim);
-  font-weight: 600;
-}
-
-.target-card-actions {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-
-/* ── Stats Row (Overview) ── */
-.overview-stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
-  margin-bottom: 1.5rem;
-}
-
-.overview-stat-box {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 1.25rem;
-  text-align: left;
-  position: relative;
-  overflow: hidden;
+  gap: 16px;
   cursor: pointer;
-  transition: var(--tr);
+  transition: all 0.12s var(--ease);
 }
 
-.overview-stat-box:hover {
-  border-color: var(--border-h);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-sm);
+.target-card:hover { border-color: var(--border-1); background: var(--bg-2); }
+
+.tc-info { min-width: 0; }
+
+.tc-domain {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg-0);
+  margin-bottom: 4px;
 }
 
-.overview-stat-val {
-  font-family: var(--font-mono);
-  font-size: 26px;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1.2;
-}
-
-.overview-stat-lbl {
+.tc-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--fg-3);
+}
+
+.tc-stats b { color: var(--fg-2); font-weight: 600; }
+
+.tc-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* ────── Stats Row ────── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.stat-box {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+}
+
+.stat-box:hover { border-color: var(--border-1); }
+
+.stat-val {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 22px;
+  color: var(--fg-0);
+  line-height: 1.1;
+}
+
+.stat-lbl {
+  font-size: 10px;
+  color: var(--fg-3);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  margin-top: 6px;
-  font-weight: 500;
+  margin-top: 4px;
+  font-weight: 600;
 }
 
-.overview-stat-box::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--border);
-  transition: var(--tr);
-}
-
-.overview-stat-box.has-data::after {
-  background: linear-gradient(90deg, var(--accent), #818cf8);
-}
-
-/* ── Panel Grid & Panels ── */
-.panel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
+/* ────── Panels & Grids ────── */
+.panel-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 16px; }
 
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.panel-title {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-/* ── Hunt Queue / Triage ── */
-.triage-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 10px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  padding: 12px 16px;
-  border-radius: var(--r-lg);
-  margin-bottom: 1rem;
-}
-
-.triage-filters {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.triage-search {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 7px 14px;
-  color: var(--fg);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
-  width: 240px;
-  transition: var(--tr);
-}
-
-.triage-search:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.triage-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.triage-row {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: start;
-  gap: 1rem;
-  transition: var(--tr);
 }
 
-.triage-row:hover {
-  border-color: var(--border-h);
-  background: var(--panel-hover);
-}
-
-.triage-priority {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 10px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  text-transform: uppercase;
-  width: 56px;
-  text-align: center;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.triage-priority.high {
-  background: var(--danger-dim);
-  color: var(--danger);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.triage-priority.med {
-  background: var(--warning-dim);
-  color: var(--warning);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-}
-
-.triage-priority.low {
-  background: rgba(113, 113, 122, 0.1);
-  color: var(--muted);
-  border: 1px solid rgba(113, 113, 122, 0.15);
-}
-
-.triage-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 4px;
-}
-
-.triage-title-line {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.triage-host {
-  font-family: var(--font-mono);
+.panel-hd {
+  font-size: 11px;
   font-weight: 600;
-  font-size: 13px;
-  color: #fff;
-  text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-3);
+  margin-bottom: 12px;
 }
 
-.triage-host:hover { color: var(--accent); }
-
-.triage-badges {
+/* ────── Toolbar ────── */
+.toolbar {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.triage-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  padding: 2px 7px;
-  border-radius: 5px;
-}
-
-.triage-badge.tech { color: var(--blue); border-color: rgba(59, 130, 246, 0.2); }
-.triage-badge.signal { border-color: rgba(99, 102, 241, 0.2); color: var(--accent); }
-
-.triage-meta-line {
-  font-size: 12px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.triage-meta-line b { color: var(--fg-dim); }
-
-.triage-actions {
-  display: flex;
-  gap: 4px;
   align-items: center;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-/* ── Section Tabs ── */
-.section-tabs-bar {
+.toolbar-stretch { flex: 1; min-width: 140px; }
+
+/* ────── Tabs ────── */
+.tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-0);
+  margin-bottom: 12px;
   overflow-x: auto;
   scrollbar-width: none;
   gap: 2px;
 }
 
-.section-tabs-bar::-webkit-scrollbar { height: 0; }
+.tabs::-webkit-scrollbar { display: none; }
 
-.section-tab-btn {
+.tab-btn {
   background: none;
   border: none;
-  color: var(--muted);
-  padding: 10px 14px;
-  font-family: var(--font-sans);
-  font-size: 12px;
+  color: var(--fg-3);
+  padding: 8px 12px;
+  font-family: var(--sans);
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
-  transition: var(--tr);
+  transition: all 0.12s var(--ease);
 }
 
-.section-tab-btn:hover { color: var(--fg-dim); }
+.tab-btn:hover { color: var(--fg-2); }
 
-.section-tab-btn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
-}
+.tab-btn.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
-/* ── Tables ── */
-.table-container {
+/* ────── Tables ────── */
+.tbl-wrap {
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  background: var(--panel);
+  background: var(--bg-1);
 }
 
-.custom-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  text-align: left;
-}
+table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
 
-.custom-table th {
-  background: rgba(255, 255, 255, 0.02);
-  color: var(--muted);
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  user-select: none;
-}
-
-.custom-table th:hover { color: var(--fg-dim); }
-
-.custom-table td {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg);
-  white-space: nowrap;
-}
-
-.custom-table tr:last-child td { border-bottom: none; }
-.custom-table tr:hover td { background: rgba(255, 255, 255, 0.015); }
-
-.custom-table td.wrap-cell {
-  white-space: normal;
-  word-break: break-all;
-  max-width: 450px;
-}
-
-/* Status Badges */
-.badge-status {
-  font-family: var(--font-mono);
-  font-weight: 700;
+th {
+  background: var(--bg-2);
+  color: var(--fg-3);
   font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 5px;
+  font-weight: 600;
   text-transform: uppercase;
-  display: inline-block;
+  letter-spacing: 0.05em;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-0);
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-.badge-status.s2xx { background: var(--good-dim); color: var(--good); }
-.badge-status.s3xx { background: var(--blue-dim); color: var(--blue); }
-.badge-status.s4xx { background: var(--warning-dim); color: var(--warning); }
-.badge-status.s5xx { background: var(--danger-dim); color: var(--danger); }
-.badge-status.s-na { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
-
-/* Table Footer / Pagination */
-.table-footer-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border);
-  font-family: var(--font-sans);
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-0);
+  font-family: var(--mono);
   font-size: 11px;
-  color: var(--muted);
-}
-
-/* ── Toolbars ── */
-.table-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.table-toolbar-left, .table-toolbar-right {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.toolbar-input {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 7px 12px;
-  color: var(--fg);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
-  transition: var(--tr);
-}
-
-.toolbar-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.toolbar-select {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 7px 12px;
-  color: var(--fg);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  outline: none;
-  cursor: pointer;
-}
-
-.toolbar-checkbox-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--muted);
-  cursor: pointer;
-  user-select: none;
-}
-
-/* ── Raw Files Layout ── */
-.raw-files-layout {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 1rem;
-}
-
-.raw-files-list {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  max-height: 650px;
-  overflow-y: auto;
-  padding: 0.5rem;
-}
-
-.raw-file-item {
-  padding: 9px 12px;
-  border-radius: var(--r);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  transition: var(--tr);
+  color: var(--fg-1);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.raw-file-item:hover {
-  background: var(--glass);
-  color: var(--fg-dim);
-}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.01); }
 
-.raw-file-item.active {
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-weight: 600;
-}
+td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 
-/* ── Screenshots ── */
-.ss-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
-}
-
-.ss-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  cursor: pointer;
-  transition: var(--tr);
-}
-
-.ss-card:hover {
-  border-color: var(--border-h);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.ss-card img {
-  width: 100%;
-  height: 160px;
-  object-fit: cover;
-  display: block;
-}
-
-.ss-footer {
-  padding: 10px 14px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  border-top: 1px solid var(--border);
-}
-
-/* ── Lightbox ── */
-.lightbox {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  z-index: 1000;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-}
-
-.lightbox.open { display: flex; }
-
-.lightbox img {
-  max-width: 90vw;
-  max-height: 85vh;
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-}
-
-.lb-label {
-  position: absolute;
-  bottom: 24px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  padding: 8px 20px;
-  border-radius: var(--r);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg);
-}
-
-/* ── Modal Dialogs ── */
-.modal-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  z-index: 950;
-  justify-content: center;
-  align-items: flex-start;
-  padding-top: 6vh;
-  overflow-y: auto;
-  backdrop-filter: blur(6px);
-}
-
-.modal-overlay.open { display: flex; }
-
-.modal {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  width: 560px;
-  max-width: 95vw;
-  margin-bottom: 2rem;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
+.tbl-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-0);
+  font-size: 11px;
+  color: var(--fg-3);
 }
 
-.modal-title {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg);
-}
+/* ── Status badges ── */
+.st { font-family: var(--mono); font-weight: 700; font-size: 10px; padding: 2px 7px; border-radius: 4px; display: inline-block; }
+.st-2 { background: var(--green-bg); color: var(--green); }
+.st-3 { background: var(--blue-bg); color: var(--blue); }
+.st-4 { background: var(--amber-bg); color: var(--amber); }
+.st-5 { background: var(--red-bg); color: var(--red); }
+.st-x { background: var(--bg-3); color: var(--fg-3); }
 
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: var(--r);
-  transition: var(--tr);
-}
-
-.modal-close:hover { color: #fff; background: var(--glass); }
-
-.modal-body { padding: 20px; }
-
-.form-group { margin-bottom: 16px; }
-
-.form-label {
-  display: block;
-  font-size: 12px;
-  color: var(--fg-dim);
-  font-weight: 500;
-  margin-bottom: 6px;
-}
-
-.form-input {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+/* ────── Hunt Queue (Triage) ────── */
+.triage-bar {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
   padding: 10px 14px;
-  color: var(--fg);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  outline: none;
-  transition: var(--tr);
-}
-
-.form-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-dim);
-}
-
-.modules-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.mod-toggle {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--muted);
-  transition: var(--tr);
-}
-
-.mod-toggle:hover { border-color: var(--border-h); color: var(--fg-dim); }
-
-.mod-toggle.active {
-  border-color: var(--accent);
-  color: #fff;
-  background: var(--accent-dim);
-}
-
-.mod-toggle .dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border-h);
-  transition: var(--tr);
-}
-
-.mod-toggle.active .dot { background: var(--accent); }
-
-.adv-toggle {
-  background: none;
-  border: none;
-  font-size: 12px;
-  color: var(--muted);
-  cursor: pointer;
-  margin: 12px 0;
-  display: block;
-  font-weight: 500;
-}
-
-.adv-toggle:hover { color: var(--fg-dim); }
-
-.adv-fields {
-  display: none;
-  grid-template-columns: 1fr 1fr 1fr;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.adv-fields.open { display: grid; }
+.triage-list { display: flex; flex-direction: column; gap: 6px; }
 
-.modal-footer {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
+.t-row {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* ── Scan Log Console ── */
-.scan-log-console {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 14px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--fg-dim);
-  max-height: 240px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  display: none;
-  line-height: 1.6;
-}
-
-.scan-log-console.visible { display: block; }
-
-/* ── Scan Status Bar ── */
-.scan-status-bar {
-  display: none;
-  align-items: center;
-  justify-content: space-between;
-  background: var(--accent-dim);
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  padding: 12px 16px;
-  border-radius: var(--r-lg);
-  margin-bottom: 1rem;
-  font-size: 12px;
-}
-
-.scan-status-bar.visible { display: flex; }
-
-.scan-status-info {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
+  transition: all 0.12s var(--ease);
 }
 
-.scan-status-info .spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(99, 102, 241, 0.2);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.t-row:hover { border-color: var(--border-1); background: var(--bg-2); }
+.t-row.hidden { display: none; }
+
+.t-sev {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  text-align: center;
+  min-width: 42px;
 }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+.t-sev.high { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.15); }
+.t-sev.med { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,0.15); }
+.t-sev.low { background: var(--bg-3); color: var(--fg-3); border: 1px solid var(--border-0); }
 
-/* ── Logs View Console ── */
-.logs-console-wrapper {
-  position: relative;
-}
+.t-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 
-.log-search-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
-  align-items: center;
-}
-
-.log-auto-scroll-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--muted);
-  cursor: pointer;
-  user-select: none;
+.t-host {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg-0);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-h); }
+.t-host:hover { color: var(--accent); }
 
-.empty-placeholder {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: var(--muted);
-  font-size: 13px;
+.t-tags { display: flex; gap: 3px; flex-wrap: wrap; }
+
+.t-tag {
+  font-family: var(--mono);
+  font-size: 9px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-0);
+  color: var(--fg-3);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
-.raw-view-panel {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 1.25rem;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--fg-dim);
-  white-space: pre-wrap;
-  overflow-x: auto;
-  max-height: 650px;
-  overflow-y: auto;
-  line-height: 1.6;
+.t-tag.tech { color: var(--blue); border-color: rgba(59,130,246,0.15); }
+.t-tag.signal { color: var(--accent); border-color: var(--accent-border); }
+
+.t-meta {
+  font-size: 11px;
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hide { display: none !important; }
+.t-meta b { color: var(--fg-2); }
 
-/* ── Finding Chips ── */
-.triage-findings {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  margin-top: 4px;
-}
+.t-findings { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
 
-.finding-chip {
+.f-chip {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 3px 0;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 0;
+  padding-left: 8px;
   border-left: 2px solid transparent;
-  padding-left: 10px;
-  line-height: 1.4;
 }
 
-.finding-icon {
-  font-size: 9px;
+.f-chip.crit { border-color: var(--red); color: var(--fg-1); }
+.f-chip.high { border-color: var(--amber); color: var(--fg-1); }
+.f-chip.med { border-color: var(--blue); color: var(--fg-2); }
+.f-chip.low { border-color: var(--border-1); color: var(--fg-3); }
+
+.f-icon {
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 1px 5px;
+  border-radius: 3px;
   flex-shrink: 0;
   text-transform: uppercase;
 }
 
-.finding-link {
-  color: inherit;
-  text-decoration: none;
-  word-break: break-all;
+.f-chip.crit .f-icon { background: var(--red-bg); color: var(--red); }
+.f-chip.high .f-icon { background: var(--amber-bg); color: var(--amber); }
+.f-chip.med .f-icon { background: var(--blue-bg); color: var(--blue); }
+.f-chip.low .f-icon { background: var(--bg-3); color: var(--fg-3); }
+
+.f-link { color: inherit; text-decoration: none; word-break: break-all; }
+.f-link:hover { text-decoration: underline; }
+
+.t-acts { display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start; }
+
+.btn-star, .btn-ignore { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; color: var(--fg-3); transition: color 0.1s; }
+.btn-star:hover { color: var(--amber); }
+.btn-ignore:hover { color: var(--red); }
+.btn-star.active { color: var(--amber) !important; }
+.btn-ignore.active { color: var(--red) !important; opacity: 0.5; }
+.t-row.t-ignored { opacity: 0.25; }
+
+/* ────── Screenshots ────── */
+.ss-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+
+.ss-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
 }
 
-.finding-link:hover { text-decoration: underline; }
+.ss-card:hover { border-color: var(--border-1); transform: translateY(-1px); }
+.ss-card img { width: 100%; height: 140px; object-fit: cover; display: block; }
 
-/* Severity levels */
-.finding-chip.sev-crit { border-left-color: var(--danger); color: var(--fg); }
-.finding-chip.sev-crit .finding-icon { background: var(--danger-dim); color: var(--danger); }
-
-.finding-chip.sev-high { border-left-color: var(--warning); color: var(--fg); }
-.finding-chip.sev-high .finding-icon { background: var(--warning-dim); color: var(--warning); }
-
-.finding-chip.sev-med { border-left-color: var(--blue); color: var(--fg-dim); }
-.finding-chip.sev-med .finding-icon { background: var(--blue-dim); color: var(--blue); }
-
-.finding-chip.sev-low { border-left-color: var(--border-h); color: var(--muted); }
-.finding-chip.sev-low .finding-icon { background: rgba(255, 255, 255, 0.04); color: var(--muted); }
-
-.triage-row.triage-ignored { opacity: 0.3; }
-
-.triage-page-title {
-  font-size: 11px;
-  color: var(--muted);
-  font-style: italic;
+.ss-cap {
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 280px;
+  border-top: 1px solid var(--border-0);
 }
 
-/* ── Overview Asset Cards ── */
-.overview-asset-card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: var(--tr);
+/* ────── Lightbox ────── */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.92);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
 }
 
-.overview-asset-card:hover {
-  border-color: var(--border-h);
-  background: var(--panel-hover);
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 85vh; border-radius: var(--radius-lg); }
+
+.lb-cap {
+  position: absolute;
+  bottom: 20px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-0);
+  padding: 6px 16px;
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-1);
 }
 
-.overview-asset-header {
+/* ────── Raw Files ────── */
+.raw-layout { display: flex; gap: 12px; }
+.raw-index {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.raw-item {
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-3);
+  transition: all 0.1s;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.raw-item:hover { background: var(--bg-2); color: var(--fg-2); }
+.raw-item.on { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+
+.raw-viewer {
+  flex: 1;
+  background: var(--bg-0);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  overflow: auto;
+  max-height: 600px;
+  line-height: 1.6;
+  min-height: 200px;
+}
+
+/* ────── Modals ────── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 900;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 5vh;
+  overflow-y: auto;
+  backdrop-filter: blur(4px);
+}
+
+.overlay.open { display: flex; }
+
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  width: 520px;
+  max-width: 94vw;
+  margin-bottom: 2rem;
+}
+
+.modal-hd {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-0);
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  justify-content: space-between;
 }
 
-.overview-asset-findings {
+.modal-hd h3 { font-size: 14px; font-weight: 600; color: var(--fg-0); }
+
+.modal-x {
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius);
+}
+
+.modal-x:hover { color: var(--fg-0); background: var(--bg-3); }
+
+.modal-bd { padding: 18px; }
+.modal-ft { padding: 12px 18px; border-top: 1px solid var(--border-0); display: flex; justify-content: flex-end; gap: 6px; }
+
+.form-g { margin-bottom: 14px; }
+.form-lbl { display: block; font-size: 11px; color: var(--fg-2); font-weight: 500; margin-bottom: 5px; }
+.form-input { width: 100%; height: 36px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); padding: 0 12px; color: var(--fg-1); font-family: var(--sans); font-size: 12px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+.modules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+
+.mod-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--fg-3);
+  transition: all 0.12s var(--ease);
+}
+
+.mod-pill:hover { border-color: var(--border-1); color: var(--fg-2); }
+
+.mod-pill.on { border-color: var(--accent); color: var(--fg-0); background: var(--accent-bg); }
+
+.mod-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-1); transition: background 0.12s; }
+.mod-pill.on .mod-dot { background: var(--accent); }
+
+.adv-btn {
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: var(--fg-3);
+  cursor: pointer;
+  margin: 10px 0;
+  font-weight: 500;
+}
+
+.adv-btn:hover { color: var(--fg-2); }
+
+.adv-grid { display: none; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.adv-grid.open { display: grid; }
+
+/* Scope section in modal */
+.scope-section { border-top: 1px solid var(--border-0); padding-top: 14px; margin-top: 10px; }
+.scope-textarea { width: 100%; min-height: 60px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); padding: 8px 12px; color: var(--fg-1); font-family: var(--mono); font-size: 11px; outline: none; resize: vertical; }
+.scope-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+
+/* ── Scan log console ── */
+.log-console {
+  background: var(--bg-0);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  display: none;
+  line-height: 1.6;
+}
+
+.log-console.vis { display: block; }
+
+/* ── Scan status bar ── */
+.scan-bar {
+  display: none;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+
+.scan-bar.vis { display: block; }
+
+.scan-bar-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.scan-bar-info { display: flex; align-items: center; gap: 10px; }
+
+.spinner { width: 12px; height: 12px; border: 2px solid var(--accent-glow); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.progress-track { width: 100%; height: 4px; background: rgba(99,102,241,0.1); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); border-radius: 2px; transition: width 0.4s var(--ease); }
+
+/* ────── Diff Matrix ────── */
+.diff-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+
+.diff-section { margin-bottom: 16px; }
+
+.diff-section h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.diff-added, .diff-removed {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.diff-added { color: var(--green); }
+.diff-added::before { content: '+ '; }
+.diff-removed { color: var(--red); }
+.diff-removed::before { content: '- '; }
+
+.diff-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.diff-stat {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+
+.diff-stat-val { font-family: var(--mono); font-weight: 700; font-size: 20px; color: var(--fg-0); }
+.diff-stat-lbl { font-size: 10px; color: var(--fg-3); margin-top: 2px; }
+
+/* ────── Logs View ────── */
+.logs-panel {
+  background: var(--bg-1);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg);
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-left: 4px;
 }
 
-.finding-count-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-
-.finding-count-badge.sev-crit { background: var(--danger-dim); color: var(--danger); }
-.finding-count-badge.sev-high { background: var(--warning-dim); color: var(--warning); }
-
-.finding-more {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--muted);
-  padding-left: 10px;
-  margin-top: 2px;
-}
-
-/* ── Loading Spinner ── */
-.loading {
+.logs-toolbar {
   display: flex;
-  justify-content: center;
-  padding: 3rem;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
-.loading .spinner {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+.logs-viewer {
+  background: var(--bg-0);
+  border: 1px solid var(--border-0);
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  overflow-y: auto;
+  min-height: 300px;
+  max-height: calc(100vh - 260px);
+  line-height: 1.6;
 }
 
-/* ── Search Highlight ── */
-.hl {
-  background: var(--warning-dim);
-  color: var(--warning);
-  padding: 0 2px;
-  border-radius: 2px;
+/* ────── Highlight ────── */
+.hl { background: var(--amber-bg); color: var(--amber); padding: 0 1px; border-radius: 2px; }
+
+/* ────── Empty/Loading ────── */
+.empty { text-align: center; padding: 40px 16px; color: var(--fg-3); font-size: 12px; }
+.loading { display: flex; justify-content: center; padding: 40px; }
+
+.hide { display: none !important; }
+
+/* ────── Overlay for mobile sidebar ────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+  backdrop-filter: blur(2px);
 }
 
-/* ── Mobile Responsive ── */
-@media (max-width: 768px) {
+.sidebar-overlay.on { display: block; }
+
+/* ────── Scrollbar ────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-0); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-1); }
+
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile-First Breakpoints
+   ════════════════════════════════════════════════════════════════ */
+
+/* Default (mobile): sidebar hidden, single column */
+@media (max-width: 767px) {
   .sidebar {
     position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    left: 0; top: 0; bottom: 0;
     transform: translateX(-100%);
-    z-index: 60;
-    box-shadow: var(--shadow-lg);
+    transition: transform 0.25s var(--ease);
+    box-shadow: 4px 0 20px rgba(0,0,0,0.4);
   }
 
-  .sidebar.mobile-open {
-    transform: translateX(0);
-  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-brand .close-btn { display: block; }
+  .hamburger { display: block; }
 
-  .sidebar-close { display: block; }
-  .hamburger-btn { display: block; }
-
-  .sidebar-overlay.active { display: block; }
-
-  .content-area { padding: 1rem; }
-
-  .triage-row {
-    grid-template-columns: auto 1fr;
-    gap: 10px;
-  }
-
-  .triage-actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-    margin-top: 4px;
-  }
-
-  .overview-stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .panel-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .raw-files-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .targets-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .triage-search { width: 100%; }
-
-  .topbar { padding: 0 1rem; }
-
+  .topbar { padding: 0 12px; }
   .topbar-meta { display: none; }
 
+  .content { padding: 12px; }
+
+  .stats-row { grid-template-columns: 1fr 1fr; }
+  .stat-val { font-size: 18px; }
+  .stat-box { padding: 12px; }
+
+  .t-row { flex-direction: column; gap: 8px; }
+  .t-acts { align-self: flex-end; }
+
+  .raw-layout { flex-direction: column; }
+  .raw-index { width: 100%; max-height: 200px; }
+
   .modules-grid { grid-template-columns: 1fr; }
+  .adv-grid { grid-template-columns: 1fr; }
 
-  .adv-fields { grid-template-columns: 1fr; }
+  .explorer { padding: 20px 12px; }
+  .explorer-top h1 { font-size: 16px; }
 
-  .explorer-screen { padding: 1.5rem 1rem; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar .input { width: 100%; }
 
-  .table-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .table-toolbar-left, .table-toolbar-right {
-    flex-direction: column;
-  }
-
-  .toolbar-input { width: 100%; }
+  .diff-controls { flex-direction: column; align-items: stretch; }
 }
 
-@media (max-width: 480px) {
-  .overview-stats-row {
-    grid-template-columns: 1fr;
-  }
+/* Tablet */
+@media (min-width: 768px) {
+  .stats-row { grid-template-columns: repeat(3, 1fr); }
+  .targets-grid { grid-template-columns: 1fr; }
+}
 
-  .triage-filters {
-    width: 100%;
-    justify-content: center;
-  }
+/* Desktop */
+@media (min-width: 1024px) {
+  .stats-row { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .panel-row { grid-template-columns: 1fr 1fr; }
+  .targets-grid { grid-template-columns: 1fr 1fr; }
+}
 
-  .ss-grid {
-    grid-template-columns: 1fr;
-  }
+@media (min-width: 1280px) {
+  .targets-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
 </style>
 </head>
 <body>
 
-  <!-- Full Explorer Screen -->
-  <div class="explorer-screen" id="explorer-screen">
-    <div class="explorer-content">
-      <div class="explorer-header">
-        <h1>404Plyh<span>::recon</span></h1>
-        <button class="btn btn-primary" onclick="openScanModal()">+ New Scan</button>
-      </div>
-
-      <div class="table-toolbar">
-        <div class="table-toolbar-left">
-          <input type="text" class="toolbar-input" id="explorer-search" placeholder="Search targets..." oninput="filterTargets(this.value)" style="width: 280px;" />
-        </div>
-      </div>
-
-      <div class="targets-grid" id="targets-container">
-        <!-- Populated dynamically -->
-      </div>
+<!-- ═══ Explorer (Target Picker) ═══ -->
+<div class="explorer" id="explorer-screen">
+  <div class="explorer-inner">
+    <div class="explorer-top">
+      <h1>404Plyh<em>::recon</em></h1>
+      <button class="btn btn-accent" onclick="openScanModal()">+ New Scan</button>
     </div>
+    <input type="text" class="input" id="explorer-search" placeholder="Search targets..." oninput="filterTargets(this.value)" style="width:100%;margin-bottom:12px;" />
+    <div class="targets-grid" id="targets-container"></div>
   </div>
+</div>
 
-  <!-- Workspace Container -->
-  <div class="app-container">
+<!-- ═══ App Shell ═══ -->
+<div class="shell">
 
-    <!-- Sidebar Overlay (Mobile) -->
-    <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <!-- Sidebar Overlay -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
-    <!-- Sidebar Navigation -->
-    <div class="sidebar" id="sidebar">
-      <div class="sidebar-header">
-        <div class="logo">404Plyh<span>::triage</span></div>
-        <button class="sidebar-close" onclick="closeSidebar()">&times;</button>
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">404Plyh<em>::triage</em></div>
+      <button class="close-btn" onclick="closeSidebar()">&times;</button>
+    </div>
+    <button class="sidebar-back" onclick="showExplorer()">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
+      Back to Explorer
+    </button>
+    <ul class="sidebar-nav">
+      <li class="on" id="nav-overview"><button onclick="switchView('overview')">Overview</button></li>
+      <li id="nav-triage"><button onclick="switchView('triage')">Hunt Queue <span class="badge" id="badge-triage">0</span></button></li>
+      <li id="nav-assets"><button onclick="switchView('assets')">Assets <span class="badge" id="badge-assets">0</span></button></li>
+      <li id="nav-webapps"><button onclick="switchView('webapps')">Web Apps <span class="badge" id="badge-webapps">0</span></button></li>
+      <li id="nav-screenshots"><button onclick="switchView('screenshots')">Screenshots <span class="badge" id="badge-screenshots">0</span></button></li>
+      <li id="nav-historical"><button onclick="switchView('historical')">Historical <span class="badge" id="badge-historical">0</span></button></li>
+      <li id="nav-js"><button onclick="switchView('js')">JS <span class="badge" id="badge-js">0</span></button></li>
+      <li id="nav-ports"><button onclick="switchView('ports')">Ports <span class="badge" id="badge-ports">0</span></button></li>
+      <li id="nav-dorks"><button onclick="switchView('dorks')">Dorks <span class="badge" id="badge-dorks">0</span></button></li>
+      <li id="nav-diff"><button onclick="switchView('diff')">Diff Matrix</button></li>
+      <li id="nav-monitor"><button onclick="switchView('monitor')">Monitor <span class="badge" id="badge-monitor">0</span></button></li>
+      <li id="nav-logs"><button onclick="switchView('logs')">Logs</button></li>
+      <li id="nav-rawfiles"><button onclick="switchView('rawfiles')">Raw Files</button></li>
+    </ul>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-l">
+        <button class="hamburger" onclick="openSidebar()">☰</button>
+        <span class="topbar-domain" id="topbar-domain">--</span>
+        <span class="topbar-meta">scanned: <b id="topbar-date">--</b></span>
       </div>
-      <div class="target-select-container">
-        <button class="btn-back-explorer" onclick="showExplorer()">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
-          Back to Explorer
-        </button>
+      <div class="topbar-r">
+        <button class="btn btn-sm btn-accent" onclick="openScanModal()">+ scan</button>
+        <button class="btn btn-sm" onclick="runMonitorScan()">monitor</button>
       </div>
-      <ul class="nav-list">
-        <li class="nav-item active" id="nav-overview"><button onclick="switchView('overview')">Overview</button></li>
-        <li class="nav-item" id="nav-triage"><button onclick="switchView('triage')">Hunt Queue <span class="nav-badge" id="badge-triage">0</span></button></li>
-        <li class="nav-item" id="nav-assets"><button onclick="switchView('assets')">Assets <span class="nav-badge" id="badge-assets">0</span></button></li>
-        <li class="nav-item" id="nav-webapps"><button onclick="switchView('webapps')">Web Apps <span class="nav-badge" id="badge-webapps">0</span></button></li>
-        <li class="nav-item" id="nav-screenshots"><button onclick="switchView('screenshots')">Screenshots <span class="nav-badge" id="badge-screenshots">0</span></button></li>
-        <li class="nav-item" id="nav-historical"><button onclick="switchView('historical')">Historical <span class="nav-badge" id="badge-historical">0</span></button></li>
-        <li class="nav-item" id="nav-js"><button onclick="switchView('js')">JS <span class="nav-badge" id="badge-js">0</span></button></li>
-        <li class="nav-item" id="nav-ports"><button onclick="switchView('ports')">Ports <span class="nav-badge" id="badge-ports">0</span></button></li>
-        <li class="nav-item" id="nav-dorks"><button onclick="switchView('dorks')">Dorks <span class="nav-badge" id="badge-dorks">0</span></button></li>
-        <li class="nav-item" id="nav-monitor"><button onclick="switchView('monitor')">Monitor <span class="nav-badge" id="badge-monitor">0</span></button></li>
-        <li class="nav-item" id="nav-logs"><button onclick="switchView('logs')">Logs</button></li>
-        <li class="nav-item" id="nav-rawfiles"><button onclick="switchView('rawfiles')">Raw Files</button></li>
-      </ul>
     </div>
 
-    <!-- Main Content Panel -->
-    <div class="main-panel">
-      <div class="topbar">
-        <div class="topbar-left">
-          <button class="hamburger-btn" onclick="openSidebar()">☰</button>
-          <div class="topbar-title" id="topbar-domain">--</div>
-          <div class="topbar-meta">
-            <span>scanned: <b id="topbar-date">--</b></span>
+    <div class="content">
+
+      <!-- Scan Status Bar -->
+      <div class="scan-bar" id="scan-bar">
+        <div class="scan-bar-top">
+          <div class="scan-bar-info">
+            <div class="spinner"></div>
+            <span id="scan-bar-text" style="font-weight:500;">Active scan running...</span>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-sm btn-red" onclick="stopScan()">stop</button>
+            <button class="btn btn-sm" onclick="openScanLog()">log</button>
           </div>
         </div>
-        <div class="topbar-actions">
-          <button class="btn btn-sm btn-primary" onclick="openScanModal()">+ scan</button>
-          <button class="btn btn-sm" onclick="runMonitorScan()">monitor</button>
-        </div>
+        <div class="progress-track"><div class="progress-fill" id="scan-progress-bar" style="width:0%;"></div></div>
       </div>
 
-      <div class="content-area">
-
-        <!-- Scan Status Header -->
-        <div class="scan-status-bar" id="scan-bar" style="padding: 14px 18px;">
-          <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <div class="scan-status-info">
-                <div class="spinner"></div>
-                <span id="scan-bar-text" style="font-family: var(--font-sans); font-weight: 500;">Active scan running...</span>
-              </div>
-              <div style="display: flex; gap: 6px;">
-                <button class="btn btn-sm btn-danger" onclick="stopScan()">stop</button>
-                <button class="btn btn-sm" onclick="openScanLog()">log</button>
-              </div>
-            </div>
-            <div style="width: 100%; background: rgba(99,102,241,0.15); height: 5px; border-radius: 3px; overflow: hidden;">
-              <div id="scan-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent), #818cf8); transition: width 0.5s ease; border-radius: 3px;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VIEW: Overview -->
-        <div class="view-section active" id="view-overview">
-          <div class="overview-stats-row" id="stats-grid">
-            <!-- Dynamically populated -->
-          </div>
-
-          <div class="panel-grid">
-            <div class="panel">
-              <div class="panel-title">Latest Monitor Changes</div>
-              <div id="overview-monitor-changes">
-                <div class="empty-placeholder">No recent changes detected.</div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-title">Top Interesting Assets</div>
-              <div id="overview-top-assets" style="display: flex; flex-direction: column; gap: 8px;">
-                <!-- Populated dynamically -->
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VIEW: Hunt Queue -->
-        <div class="view-section" id="view-triage">
-          <div class="triage-bar">
-            <div class="triage-filters">
-              <button class="btn btn-sm btn-primary" id="btn-triage-all" onclick="filterTriagePriority('all')">All</button>
-              <button class="btn btn-sm" id="btn-triage-high" onclick="filterTriagePriority('high')">High</button>
-              <button class="btn btn-sm" id="btn-triage-med" onclick="filterTriagePriority('med')">Med</button>
-              <button class="btn btn-sm" id="btn-triage-low" onclick="filterTriagePriority('low')">Low</button>
-              <button class="btn btn-sm" id="btn-triage-starred" onclick="filterTriagePriority('starred')">★ Starred</button>
-            </div>
-            <div class="triage-filters">
-              <input type="text" class="triage-search" id="triage-search-input" placeholder="Search hosts, tech, findings..." oninput="filterTriageText(this.value)" />
-              <label class="toolbar-checkbox-label">
-                <input type="checkbox" id="triage-hide-ignored" checked onchange="toggleHideIgnored(this.checked)" /> Hide Ignored
-              </label>
-            </div>
-          </div>
-
-          <div class="triage-list" id="triage-list-container">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- VIEW: Assets -->
-        <div class="view-section" id="view-assets">
-          <div class="section-tabs-bar">
-            <button class="section-tab-btn active" id="tab-assets-subs" onclick="switchSectionSubTab('assets', 'subs')">Subdomains <span class="nav-badge" id="tc-assets-subs">0</span></button>
-            <button class="section-tab-btn" id="tab-assets-dns" onclick="switchSectionSubTab('assets', 'dns')">DNS Resolved <span class="nav-badge" id="tc-assets-dns">0</span></button>
-          </div>
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-assets-search" placeholder="Search assets..." oninput="assetsFilter(this.value)" />
-            </div>
-          </div>
-          <div class="table-container" id="data-assets-content"></div>
-        </div>
-
-        <!-- VIEW: Web Apps -->
-        <div class="view-section" id="view-webapps">
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-webapps-search" placeholder="Search web apps..." oninput="webappsFilter(this.value)" />
-              <select class="toolbar-select" id="filter-webapps-status" onchange="webappsStatusFilter(this.value)">
-                <option value="">All Status</option>
-                <option value="2">2xx</option>
-                <option value="3">3xx</option>
-                <option value="4">4xx</option>
-                <option value="5">5xx</option>
-              </select>
-            </div>
-            <div class="table-toolbar-right">
-              <label class="toolbar-checkbox-label">
-                <input type="checkbox" id="webapps-hide-duplicates" checked onchange="toggleWebappsHideDuplicates(this.checked)" /> Hide duplicates
-              </label>
-            </div>
-          </div>
-          <div class="table-container" id="data-webapps-content"></div>
-        </div>
-
-        <!-- VIEW: Screenshots -->
-        <div class="view-section" id="view-screenshots">
-          <div class="ss-grid" id="data-screenshots"></div>
-        </div>
-
-        <!-- VIEW: Historical -->
-        <div class="view-section" id="view-historical">
-          <div class="section-tabs-bar">
-            <button class="section-tab-btn active" id="tab-historical-interesting" onclick="switchSectionSubTab('historical', 'interesting')">Interesting <span class="nav-badge" id="tc-historical-interesting">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-validated" onclick="switchSectionSubTab('historical', 'validated')">Validated <span class="nav-badge" id="tc-historical-validated">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-auth" onclick="switchSectionSubTab('historical', 'auth')">Auth/Admin <span class="nav-badge" id="tc-historical-auth">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-apis" onclick="switchSectionSubTab('historical', 'apis')">APIs <span class="nav-badge" id="tc-historical-apis">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-sensitive" onclick="switchSectionSubTab('historical', 'sensitive')">Sensitive <span class="nav-badge" id="tc-historical-sensitive">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-static" onclick="switchSectionSubTab('historical', 'static')">Static <span class="nav-badge" id="tc-historical-static">0</span></button>
-            <button class="section-tab-btn" id="tab-historical-all" onclick="switchSectionSubTab('historical', 'all')">All <span class="nav-badge" id="tc-historical-all">0</span></button>
-          </div>
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-historical-search" placeholder="Filter URLs..." oninput="historicalFilter(this.value)" />
-              <input type="text" class="toolbar-input" id="filter-historical-host" placeholder="By host..." oninput="historicalHostFilter(this.value)" />
-              <input type="text" class="toolbar-input" id="filter-historical-ext" placeholder="Extension..." oninput="historicalExtFilter(this.value)" />
-            </div>
-            <div class="table-toolbar-right">
-              <label class="toolbar-checkbox-label">
-                <input type="checkbox" id="hist-hide-static" checked onchange="toggleHistHideStatic(this.checked)" /> Hide static
-              </label>
-              <label class="toolbar-checkbox-label">
-                <input type="checkbox" id="hist-hide-404" checked onchange="toggleHistHide404(this.checked)" /> Hide 404
-              </label>
-              <label class="toolbar-checkbox-label">
-                <input type="checkbox" id="hist-hide-dupes" checked onchange="toggleHistHideDupes(this.checked)" /> Hide dupes
-              </label>
-            </div>
-          </div>
-          <div class="table-container" id="data-historical-content"></div>
-        </div>
-
-        <!-- VIEW: JS -->
-        <div class="view-section" id="view-js">
-          <div class="section-tabs-bar">
-            <button class="section-tab-btn active" id="tab-js-scripts" onclick="switchSectionSubTab('js', 'scripts')">Scripts <span class="nav-badge" id="tc-js-scripts">0</span></button>
-            <button class="section-tab-btn" id="tab-js-endpoints" onclick="switchSectionSubTab('js', 'endpoints')">Endpoints <span class="nav-badge" id="tc-js-endpoints">0</span></button>
-            <button class="section-tab-btn" id="tab-js-secrets" onclick="switchSectionSubTab('js', 'secrets')">Secrets <span class="nav-badge" id="tc-js-secrets">0</span></button>
-            <button class="section-tab-btn" id="tab-js-leakage" onclick="switchSectionSubTab('js', 'leakage')">Leakage <span class="nav-badge" id="tc-js-leakage">0</span></button>
-            <button class="section-tab-btn" id="tab-js-comments" onclick="switchSectionSubTab('js', 'comments')">Comments <span class="nav-badge" id="tc-js-comments">0</span></button>
-            <button class="section-tab-btn" id="tab-js-maps" onclick="switchSectionSubTab('js', 'maps')">Source Maps <span class="nav-badge" id="tc-js-maps">0</span></button>
-            <button class="section-tab-btn" id="tab-js-api" onclick="switchSectionSubTab('js', 'api')">API Endpoints <span class="nav-badge" id="tc-js-api">0</span></button>
-            <button class="section-tab-btn" id="tab-js-buckets" onclick="switchSectionSubTab('js', 'buckets')">Buckets <span class="nav-badge" id="tc-js-buckets">0</span></button>
-            <button class="section-tab-btn" id="tab-js-ws" onclick="switchSectionSubTab('js', 'ws')">Websockets <span class="nav-badge" id="tc-js-ws">0</span></button>
-          </div>
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-js-search" placeholder="Search JS data..." oninput="jsFilter(this.value)" />
-            </div>
-          </div>
-          <div class="table-container" id="data-js-content"></div>
-        </div>
-
-        <!-- VIEW: Ports -->
-        <div class="view-section" id="view-ports">
-          <div class="section-tabs-bar">
-            <button class="section-tab-btn active" id="tab-ports-naabu" onclick="switchSectionSubTab('ports', 'naabu')">Naabu <span class="nav-badge" id="tc-ports-naabu">0</span></button>
-            <button class="section-tab-btn" id="tab-ports-targets" onclick="switchSectionSubTab('ports', 'targets')">Targets <span class="nav-badge" id="tc-ports-targets">0</span></button>
-            <button class="section-tab-btn" id="tab-ports-nmap" onclick="switchSectionSubTab('ports', 'nmap')">Nmap <span class="nav-badge" id="tc-ports-nmap">0</span></button>
-            <button class="section-tab-btn" id="tab-ports-gnmap" onclick="switchSectionSubTab('ports', 'gnmap')">Greppable <span class="nav-badge" id="tc-ports-gnmap">0</span></button>
-          </div>
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-ports-search" placeholder="Search ports..." oninput="portsFilter(this.value)" />
-            </div>
-          </div>
-          <div class="table-container" id="data-ports-content"></div>
-        </div>
-
-        <!-- VIEW: Dorks -->
-        <div class="view-section" id="view-dorks">
-          <div class="section-tabs-bar">
-            <button class="section-tab-btn active" id="tab-dorks-all" onclick="switchSectionSubTab('dorks', 'all')">All <span class="nav-badge" id="tc-dorks-all">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-config" onclick="switchSectionSubTab('dorks', 'config')">Config <span class="nav-badge" id="tc-dorks-config">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-backups" onclick="switchSectionSubTab('dorks', 'backups')">Backups <span class="nav-badge" id="tc-dorks-backups">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-logs" onclick="switchSectionSubTab('dorks', 'logs')">Logs <span class="nav-badge" id="tc-dorks-logs">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-admin" onclick="switchSectionSubTab('dorks', 'admin')">Admin <span class="nav-badge" id="tc-dorks-admin">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-cloud" onclick="switchSectionSubTab('dorks', 'cloud')">Cloud <span class="nav-badge" id="tc-dorks-cloud">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-auth" onclick="switchSectionSubTab('dorks', 'auth')">Auth <span class="nav-badge" id="tc-dorks-auth">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-active" onclick="switchSectionSubTab('dorks', 'active')">Active <span class="nav-badge" id="tc-dorks-active">0</span></button>
-            <button class="section-tab-btn" id="tab-dorks-confirmed" onclick="switchSectionSubTab('dorks', 'confirmed')">Confirmed <span class="nav-badge" id="tc-dorks-confirmed">0</span></button>
-          </div>
-          <div class="table-toolbar">
-            <div class="table-toolbar-left">
-              <input type="text" class="toolbar-input" id="filter-dorks-search" placeholder="Search dorks..." oninput="dorksFilter(this.value)" />
-            </div>
-          </div>
-          <div class="table-container" id="data-dorks-content"></div>
-        </div>
-
-        <!-- VIEW: Monitor -->
-        <div class="view-section" id="view-monitor">
-          <div class="panel-grid">
-            <div class="panel" style="margin-bottom: 0;">
-              <div class="panel-title">Baseline Stats</div>
-              <div class="monitor-summary" id="monitor-baseline-summary"></div>
-            </div>
+      <!-- VIEW: Overview -->
+      <div class="view on" id="view-overview">
+        <div class="stats-row" id="stats-grid"></div>
+        <div class="panel-row">
+          <div class="panel">
+            <div class="panel-hd">Latest Monitor Changes</div>
+            <div id="overview-monitor-changes"><div class="empty">No recent changes detected.</div></div>
           </div>
           <div class="panel">
-            <div class="panel-title">Changes Timeline</div>
-            <div class="monitor-timeline" id="data-monitor"></div>
+            <div class="panel-hd">Top Interesting Assets</div>
+            <div id="overview-top-assets"></div>
           </div>
         </div>
+      </div>
 
-        <!-- VIEW: Logs -->
-        <div class="view-section" id="view-logs">
-          <div class="panel" style="display: flex; flex-direction: column; height: 100%; box-sizing: border-box;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-shrink: 0; flex-wrap: wrap; gap: 8px;">
-              <div class="panel-title" style="margin-bottom: 0;">Scan Output Logs</div>
-              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <input type="text" class="toolbar-input" id="log-search-input" placeholder="Search logs..." oninput="filterLogContent(this.value)" style="width: 180px;" />
-                <select class="toolbar-select" id="log-file-selector" onchange="window.selectLogFile(this.value)" style="width: 200px;"></select>
-                <label class="log-auto-scroll-toggle">
-                  <input type="checkbox" id="log-auto-scroll" checked /> Auto-scroll
-                </label>
-              </div>
+      <!-- VIEW: Triage -->
+      <div class="view" id="view-triage">
+        <div class="triage-bar">
+          <button class="btn btn-sm btn-accent" id="btn-triage-all" onclick="filterTriagePriority('all')">All</button>
+          <button class="btn btn-sm" id="btn-triage-high" onclick="filterTriagePriority('high')">High</button>
+          <button class="btn btn-sm" id="btn-triage-med" onclick="filterTriagePriority('med')">Med</button>
+          <button class="btn btn-sm" id="btn-triage-low" onclick="filterTriagePriority('low')">Low</button>
+          <button class="btn btn-sm" id="btn-triage-starred" onclick="filterTriagePriority('starred')">★</button>
+          <input type="text" class="input toolbar-stretch" id="triage-search-input" placeholder="Search hosts, tech, findings..." oninput="filterTriageText(this.value)" />
+          <label class="chk-label"><input type="checkbox" id="triage-hide-ignored" checked onchange="toggleHideIgnored(this.checked)" /> Hide ignored</label>
+        </div>
+        <div class="triage-list" id="triage-list-container"></div>
+      </div>
+
+      <!-- VIEW: Assets -->
+      <div class="view" id="view-assets">
+        <div class="tabs">
+          <button class="tab-btn on" id="tab-assets-subs" onclick="switchSectionSubTab('assets','subs')">Subdomains <span class="badge" id="tc-assets-subs">0</span></button>
+          <button class="tab-btn" id="tab-assets-dns" onclick="switchSectionSubTab('assets','dns')">DNS Resolved <span class="badge" id="tc-assets-dns">0</span></button>
+        </div>
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-assets-search" placeholder="Search assets..." oninput="assetsFilter(this.value)" />
+        </div>
+        <div class="tbl-wrap" id="data-assets-content"></div>
+      </div>
+
+      <!-- VIEW: Web Apps -->
+      <div class="view" id="view-webapps">
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-webapps-search" placeholder="Search web apps..." oninput="webappsFilter(this.value)" />
+          <select class="select" id="filter-webapps-status" onchange="webappsStatusFilter(this.value)">
+            <option value="">All Status</option>
+            <option value="2">2xx</option><option value="3">3xx</option><option value="4">4xx</option><option value="5">5xx</option>
+          </select>
+          <label class="chk-label"><input type="checkbox" id="webapps-hide-duplicates" checked onchange="toggleWebappsHideDuplicates(this.checked)" /> Hide duplicates</label>
+        </div>
+        <div class="tbl-wrap" id="data-webapps-content"></div>
+      </div>
+
+      <!-- VIEW: Screenshots -->
+      <div class="view" id="view-screenshots">
+        <div class="ss-grid" id="data-screenshots"></div>
+      </div>
+
+      <!-- VIEW: Historical -->
+      <div class="view" id="view-historical">
+        <div class="tabs">
+          <button class="tab-btn on" id="tab-historical-interesting" onclick="switchSectionSubTab('historical','interesting')">Interesting <span class="badge" id="tc-historical-interesting">0</span></button>
+          <button class="tab-btn" id="tab-historical-validated" onclick="switchSectionSubTab('historical','validated')">Validated <span class="badge" id="tc-historical-validated">0</span></button>
+          <button class="tab-btn" id="tab-historical-auth" onclick="switchSectionSubTab('historical','auth')">Auth <span class="badge" id="tc-historical-auth">0</span></button>
+          <button class="tab-btn" id="tab-historical-apis" onclick="switchSectionSubTab('historical','apis')">APIs <span class="badge" id="tc-historical-apis">0</span></button>
+          <button class="tab-btn" id="tab-historical-sensitive" onclick="switchSectionSubTab('historical','sensitive')">Sensitive <span class="badge" id="tc-historical-sensitive">0</span></button>
+          <button class="tab-btn" id="tab-historical-static" onclick="switchSectionSubTab('historical','static')">Static <span class="badge" id="tc-historical-static">0</span></button>
+          <button class="tab-btn" id="tab-historical-all" onclick="switchSectionSubTab('historical','all')">All <span class="badge" id="tc-historical-all">0</span></button>
+        </div>
+        <div class="toolbar">
+          <input type="text" class="input" id="filter-historical-search" placeholder="Filter URLs..." oninput="historicalFilter(this.value)" style="flex:2;min-width:120px;" />
+          <input type="text" class="input" id="filter-historical-host" placeholder="By host..." oninput="historicalHostFilter(this.value)" style="flex:1;min-width:100px;" />
+          <input type="text" class="input" id="filter-historical-ext" placeholder="Ext..." oninput="historicalExtFilter(this.value)" style="width:80px;" />
+          <label class="chk-label"><input type="checkbox" id="hist-hide-static" checked onchange="toggleHistHideStatic(this.checked)" /> Static</label>
+          <label class="chk-label"><input type="checkbox" id="hist-hide-404" checked onchange="toggleHistHide404(this.checked)" /> 404</label>
+          <label class="chk-label"><input type="checkbox" id="hist-hide-dupes" checked onchange="toggleHistHideDupes(this.checked)" /> Dupes</label>
+        </div>
+        <div class="tbl-wrap" id="data-historical-content"></div>
+      </div>
+
+      <!-- VIEW: JS -->
+      <div class="view" id="view-js">
+        <div class="tabs">
+          <button class="tab-btn on" id="tab-js-scripts" onclick="switchSectionSubTab('js','scripts')">Scripts <span class="badge" id="tc-js-scripts">0</span></button>
+          <button class="tab-btn" id="tab-js-endpoints" onclick="switchSectionSubTab('js','endpoints')">Endpoints <span class="badge" id="tc-js-endpoints">0</span></button>
+          <button class="tab-btn" id="tab-js-secrets" onclick="switchSectionSubTab('js','secrets')">Secrets <span class="badge" id="tc-js-secrets">0</span></button>
+          <button class="tab-btn" id="tab-js-leakage" onclick="switchSectionSubTab('js','leakage')">Leakage <span class="badge" id="tc-js-leakage">0</span></button>
+          <button class="tab-btn" id="tab-js-comments" onclick="switchSectionSubTab('js','comments')">Comments <span class="badge" id="tc-js-comments">0</span></button>
+          <button class="tab-btn" id="tab-js-maps" onclick="switchSectionSubTab('js','maps')">Source Maps <span class="badge" id="tc-js-maps">0</span></button>
+          <button class="tab-btn" id="tab-js-api" onclick="switchSectionSubTab('js','api')">API <span class="badge" id="tc-js-api">0</span></button>
+          <button class="tab-btn" id="tab-js-buckets" onclick="switchSectionSubTab('js','buckets')">Buckets <span class="badge" id="tc-js-buckets">0</span></button>
+          <button class="tab-btn" id="tab-js-ws" onclick="switchSectionSubTab('js','ws')">Websockets <span class="badge" id="tc-js-ws">0</span></button>
+        </div>
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-js-search" placeholder="Search JS data..." oninput="jsFilter(this.value)" />
+        </div>
+        <div class="tbl-wrap" id="data-js-content"></div>
+      </div>
+
+      <!-- VIEW: Ports -->
+      <div class="view" id="view-ports">
+        <div class="tabs">
+          <button class="tab-btn on" id="tab-ports-naabu" onclick="switchSectionSubTab('ports','naabu')">Naabu <span class="badge" id="tc-ports-naabu">0</span></button>
+          <button class="tab-btn" id="tab-ports-targets" onclick="switchSectionSubTab('ports','targets')">Targets <span class="badge" id="tc-ports-targets">0</span></button>
+          <button class="tab-btn" id="tab-ports-nmap" onclick="switchSectionSubTab('ports','nmap')">Nmap <span class="badge" id="tc-ports-nmap">0</span></button>
+          <button class="tab-btn" id="tab-ports-gnmap" onclick="switchSectionSubTab('ports','gnmap')">Greppable <span class="badge" id="tc-ports-gnmap">0</span></button>
+        </div>
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-ports-search" placeholder="Search ports..." oninput="portsFilter(this.value)" />
+        </div>
+        <div class="tbl-wrap" id="data-ports-content"></div>
+      </div>
+
+      <!-- VIEW: Dorks -->
+      <div class="view" id="view-dorks">
+        <div class="tabs">
+          <button class="tab-btn on" id="tab-dorks-all" onclick="switchSectionSubTab('dorks','all')">All <span class="badge" id="tc-dorks-all">0</span></button>
+          <button class="tab-btn" id="tab-dorks-config" onclick="switchSectionSubTab('dorks','config')">Config <span class="badge" id="tc-dorks-config">0</span></button>
+          <button class="tab-btn" id="tab-dorks-backups" onclick="switchSectionSubTab('dorks','backups')">Backups <span class="badge" id="tc-dorks-backups">0</span></button>
+          <button class="tab-btn" id="tab-dorks-logs" onclick="switchSectionSubTab('dorks','logs')">Logs <span class="badge" id="tc-dorks-logs">0</span></button>
+          <button class="tab-btn" id="tab-dorks-admin" onclick="switchSectionSubTab('dorks','admin')">Admin <span class="badge" id="tc-dorks-admin">0</span></button>
+          <button class="tab-btn" id="tab-dorks-cloud" onclick="switchSectionSubTab('dorks','cloud')">Cloud <span class="badge" id="tc-dorks-cloud">0</span></button>
+          <button class="tab-btn" id="tab-dorks-auth" onclick="switchSectionSubTab('dorks','auth')">Auth <span class="badge" id="tc-dorks-auth">0</span></button>
+          <button class="tab-btn" id="tab-dorks-active" onclick="switchSectionSubTab('dorks','active')">Active <span class="badge" id="tc-dorks-active">0</span></button>
+          <button class="tab-btn" id="tab-dorks-confirmed" onclick="switchSectionSubTab('dorks','confirmed')">Confirmed <span class="badge" id="tc-dorks-confirmed">0</span></button>
+        </div>
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-dorks-search" placeholder="Search dorks..." oninput="dorksFilter(this.value)" />
+        </div>
+        <div class="tbl-wrap" id="data-dorks-content"></div>
+      </div>
+
+      <!-- VIEW: Diff Matrix -->
+      <div class="view" id="view-diff">
+        <div class="diff-controls">
+          <select class="select" id="diff-scan-a" style="flex:1;min-width:160px;"><option value="">Scan A (older)...</option></select>
+          <span style="color:var(--fg-3);font-size:12px;">vs</span>
+          <select class="select" id="diff-scan-b" style="flex:1;min-width:160px;"><option value="">Scan B (newer)...</option></select>
+          <button class="btn btn-accent btn-sm" onclick="runDiff()">Compare</button>
+        </div>
+        <div id="diff-results"><div class="empty">Select two scans above to compare changes.</div></div>
+      </div>
+
+      <!-- VIEW: Monitor -->
+      <div class="view" id="view-monitor">
+        <div class="panel-row">
+          <div class="panel">
+            <div class="panel-hd">Baseline Stats</div>
+            <div id="monitor-baseline-summary"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-hd">Changes Timeline</div>
+          <div id="data-monitor"></div>
+        </div>
+      </div>
+
+      <!-- VIEW: Logs -->
+      <div class="view" id="view-logs">
+        <div class="logs-panel">
+          <div class="logs-toolbar">
+            <div class="panel-hd" style="margin-bottom:0;">Scan Output Logs</div>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+              <input type="text" class="input" id="log-search-input" placeholder="Search logs..." oninput="filterLogContent(this.value)" style="width:160px;" />
+              <select class="select" id="log-file-selector" onchange="window.selectLogFile(this.value)" style="width:180px;"></select>
+              <label class="chk-label"><input type="checkbox" id="log-auto-scroll" checked /> Auto-scroll</label>
             </div>
-            <div class="scan-log-console visible" id="logs-scan-log" style="flex-grow: 1; min-height: 400px; max-height: calc(100vh - 240px); overflow-y: auto;">No logs active. Select a previous scan log or start a new scan.</div>
           </div>
+          <div class="logs-viewer" id="logs-scan-log">No logs active. Select a previous scan log or start a new scan.</div>
         </div>
-
-        <!-- VIEW: Raw Files -->
-        <div class="view-section" id="view-rawfiles">
-          <div class="raw-files-layout">
-            <div class="raw-files-list" id="raw-files-index"></div>
-            <div class="raw-view-panel" id="raw-file-viewer">
-              Select a raw file from the left panel to inspect its contents.
-            </div>
-          </div>
-        </div>
-
       </div>
-    </div>
 
-  </div>
+      <!-- VIEW: Raw Files -->
+      <div class="view" id="view-rawfiles">
+        <div class="raw-layout">
+          <div class="raw-index" id="raw-files-index"></div>
+          <div class="raw-viewer" id="raw-file-viewer">Select a raw file to inspect.</div>
+        </div>
+      </div>
 
-  <!-- Scan Modal -->
-  <div class="modal-overlay" id="scan-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <span class="modal-title">Run New Scan</span>
-        <button class="modal-close" onclick="closeScanModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Target Domain</label>
-          <input class="form-input" id="scan-domain" placeholder="example.com"/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Active Modules</label>
-          <div class="modules-grid" id="modules-grid"></div>
-        </div>
-        <button class="adv-toggle" onclick="document.getElementById('adv-fields').classList.toggle('open')">Advanced Options ▾</button>
-        <div class="adv-fields" id="adv-fields">
-          <div class="form-group">
-            <label class="form-label">Threads</label>
-            <input class="form-input" id="scan-threads" placeholder="15"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Rate Limit</label>
-            <input class="form-input" id="scan-rate" placeholder="150"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Top Ports</label>
-            <input class="form-input" id="scan-ports" placeholder="1000"/>
-          </div>
-        </div>
-        <div class="scan-log-console" id="scan-log"></div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="closeScanModal()">Cancel</button>
-        <button class="btn btn-primary" id="start-scan-btn" onclick="startScan()">Start Scan</button>
-      </div>
     </div>
   </div>
+</div>
 
-  <!-- Monitor Modal -->
-  <div class="modal-overlay" id="monitor-modal">
-    <div class="modal">
-      <div class="modal-header">
-        <span class="modal-title">Run Monitor Check</span>
-        <button class="modal-close" onclick="closeMonitorModal()">&times;</button>
+<!-- ═══ Scan Modal ═══ -->
+<div class="overlay" id="scan-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3>New Scan</h3>
+      <button class="modal-x" onclick="closeScanModal()">&times;</button>
+    </div>
+    <div class="modal-bd">
+      <div class="form-g">
+        <label class="form-lbl">Target Domain</label>
+        <input class="form-input" id="scan-domain" placeholder="example.com" />
       </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Target Domain</label>
-          <input class="form-input" id="monitor-domain" placeholder="example.com"/>
+      <div class="form-g">
+        <label class="form-lbl">Modules</label>
+        <div class="modules-grid" id="modules-grid"></div>
+      </div>
+      <button class="adv-btn" onclick="document.getElementById('adv-fields').classList.toggle('open')">Advanced ▾</button>
+      <div class="adv-grid" id="adv-fields">
+        <div class="form-g"><label class="form-lbl">Threads</label><input class="form-input" id="scan-threads" placeholder="15" /></div>
+        <div class="form-g"><label class="form-lbl">Rate Limit</label><input class="form-input" id="scan-rate" placeholder="150" /></div>
+        <div class="form-g"><label class="form-lbl">Top Ports</label><input class="form-input" id="scan-ports" placeholder="1000" /></div>
+      </div>
+      <!-- Scope Rules -->
+      <div class="scope-section">
+        <label class="form-lbl">Scope Rules (optional)</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <label class="form-lbl" style="font-size:10px;color:var(--fg-3);">In-scope (one pattern per line)</label>
+            <textarea class="scope-textarea" id="scope-in" placeholder="*.example.com&#10;10.0.0.0/8"></textarea>
+          </div>
+          <div>
+            <label class="form-lbl" style="font-size:10px;color:var(--fg-3);">Out-of-scope</label>
+            <textarea class="scope-textarea" id="scope-out" placeholder="*.cdn.example.com&#10;payments.example.com"></textarea>
+          </div>
         </div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px;">Runs a lightweight subdomain + port check to detect changes against saved baselines.</p>
       </div>
-      <div class="modal-footer">
-        <button class="btn" onclick="closeMonitorModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitMonitorModal()">Run Check</button>
-      </div>
+      <div class="log-console" id="scan-log"></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeScanModal()">Cancel</button>
+      <button class="btn btn-accent" id="start-scan-btn" onclick="startScan()">Start Scan</button>
     </div>
   </div>
+</div>
 
-  <!-- Lightbox -->
-  <div class="lightbox" id="lightbox">
-    <img id="lb-img" src="" alt=""/>
-    <div class="lb-label" id="lb-label"></div>
+<!-- ═══ Monitor Modal ═══ -->
+<div class="overlay" id="monitor-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h3>Monitor Check</h3>
+      <button class="modal-x" onclick="closeMonitorModal()">&times;</button>
+    </div>
+    <div class="modal-bd">
+      <div class="form-g">
+        <label class="form-lbl">Target Domain</label>
+        <input class="form-input" id="monitor-domain" placeholder="example.com" />
+      </div>
+      <p style="font-size:11px;color:var(--fg-3);margin-top:6px;">Runs a lightweight subdomain + port check against saved baselines.</p>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeMonitorModal()">Cancel</button>
+      <button class="btn btn-accent" onclick="submitMonitorModal()">Run Check</button>
+    </div>
   </div>
+</div>
 
-  <script src="dashboard.js"></script>
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <img id="lb-img" src="" alt="" />
+  <div class="lb-cap" id="lb-label"></div>
+</div>
+
+<script src="dashboard.js"></script>
 </body>
 </html>
