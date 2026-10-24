@@ -15,6 +15,26 @@ let triageTextFilter = '';
 let triageHideIgnored = true;
 let huntQueueItems = [];
 
+// Cockpit (Phase 1/2): current filtered rows, keyboard cursor, selected asset
+let triageVisible = [];
+let triageCursor = -1;
+let selectedHost = null;
+
+// Finding-model filters (Phase 3b): filter the queue by finding tier / verdict
+let triageTierFilter = 'all';          // all | confirmed | suspicious | observation
+let triageHideDismissed = false;       // hide assets whose findings are all false-positive / wont-fix
+const DISMISSED_VERDICTS = ['false_positive', 'wont_fix'];
+
+// Hunt Queue rendering is chunked: only the first TRIAGE_RENDER_STEP rows are
+// put in the DOM, "Show more" (or the j/k cursor) extends it. Thousands of rows
+// at once froze phones.
+const TRIAGE_RENDER_STEP = 100;
+let triageRenderLimit = TRIAGE_RENDER_STEP;
+// Hosts whose (not-downloaded) findings match the text filter, from the server.
+let triageSearchHosts = null;
+let triageSearchFor = '';
+let triageSearchTimer = null;
+
 // Historical filters
 let histActiveTab = 'interesting';
 let histTextQuery = '';
@@ -46,55 +66,115 @@ async function fetchText(p){try{const r=await fetch(API+p);if(!r.ok)return'';ret
 async function postJSON(p,body){try{const r=await fetch(API+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return await r.json()}catch{return null}}
 function T(p){return `/api/file/${currentTarget}/${p}`}
 
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+// HTML-escape for text AND attribute contexts (quotes included: target data such
+// as archived URLs routinely contains " and ').
+const ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s){return (s == null ? '' : String(s)).replace(/[&<>"']/g,c=>ESC_MAP[c])}
+// A string literal for use inside an inline on*="..." handler. Entity-escaping
+// alone is not enough there (the browser decodes &#39; back to ' before the JS
+// runs), so JSON-encode first, then HTML-escape.
+function jsq(s){return esc(JSON.stringify(s == null ? '' : String(s)))}
 function parseLines(t){return t.split('\n').map(l=>l.strip ? l.strip() : l.trim()).filter(Boolean)}
-function sBadge(c){const n=parseInt(c);if(!n)return'<span class="st st-x">--</span>';const k=n<300?'2':n<400?'3':n<500?'4':'5';return`<span class="st st-${k}">${n}</span>`}
-function hilite(text,q){if(!q)return esc(text);const re=new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'gi');return esc(text).replace(re,'<span class="hl">$1</span>')}
 
-// ── Advanced Reusable Paged Table Maker ──
+// ── Toasts (surface failures instead of swallowing them) ──
+function toast(msg, type = 'info', timeout = 4000) {
+  let host = document.getElementById('toast-host');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toast-host';
+    document.body.appendChild(host);
+  }
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  host.appendChild(el);
+  // force reflow then show, so the CSS transition runs
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 250);
+  }, timeout);
+}
+window.toast = toast;
+
+// ── Server-side triage state (star / ignore) — localStorage is fallback only ──
+let triageStarred = new Set();
+let triageIgnored = new Set();
+
+async function loadTriageState() {
+  triageStarred = new Set();
+  triageIgnored = new Set();
+  const data = await fetchJSON(`/api/triage?target=${encodeURIComponent(currentTarget)}`);
+  if (data) {
+    (data.starred || []).forEach(h => triageStarred.add(h));
+    (data.ignored || []).forEach(h => triageIgnored.add(h));
+  } else {
+    // Fallback: rebuild from localStorage cache if the server is unreachable
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(`triage_star_${currentTarget}_`) && localStorage.getItem(k) === 'true') {
+          triageStarred.add(k.slice(`triage_star_${currentTarget}_`.length));
+        }
+        if (k && k.startsWith(`triage_ignore_${currentTarget}_`) && localStorage.getItem(k) === 'true') {
+          triageIgnored.add(k.slice(`triage_ignore_${currentTarget}_`.length));
+        }
+      }
+    } catch (e) {}
+  }
+}
+
+async function persistTriage() {
+  const body = {
+    target: currentTarget,
+    starred: [...triageStarred],
+    ignored: [...triageIgnored]
+  };
+  const res = await postJSON('/api/triage', body);
+  if (!res?.ok) toast('Could not save triage state to server (kept locally).', 'warn');
+}
+
+const isStarred = (host) => triageStarred.has(host);
+const isIgnored = (host) => triageIgnored.has(host);
+
+function sBadge(c){const n=parseInt(c);if(!n)return'<span class="st st-x">--</span>';const k=n<300?'2':n<400?'3':n<500?'4':'5';return`<span class="st st-${k}">${n}</span>`}
+function hilite(text,q){if(!q)return esc(text);const re=new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`,'gi');return (text == null ? '' : String(text)).split(re).map((p,i)=>i%2?`<span class="hl">${esc(p)}</span>`:esc(p)).join('')}
+
+// ── Paged table registry (shared by makeServerTable) ──
 let _pagId = 0;
 const _pagRegistry = {};
-function makePagedTable(containerId, items, columns, renderRowFn, filterFn, pageSize = 50) {
-  let page = 0;
-  let filtered = [...items];
-  let sortBy = null;
-  let sortAsc = true;
+// ── Server-paged table ──
+// Table markup + sort/pager controls, but the server filters, sorts and
+// slices (see /api/data/*), so only one page ever reaches the browser. Large
+// scopes used to download and parse whole result files here, which was slow
+// on the Pi and crashed mobile browsers.
+//   urlFn(params) -> request URL, params = {page, pageSize, sort, dir, ...args}
+//   renderRowFn(item, index, args) -> '<tr>…</tr>'
+function makeServerTable(containerId, urlFn, columns, renderRowFn, opts = {}) {
+  const pageSize = opts.pageSize || 50;
+  let page = 0, sortBy = null, sortAsc = true, args = opts.args || {};
+  let total = 0, seq = 0, timer = null;
   const id = _pagId++;
 
-  function sortData(colKey) {
-    if (sortBy === colKey) {
-      sortAsc = !sortAsc;
-    } else {
-      sortBy = colKey;
-      sortAsc = true;
-    }
-    filtered.sort((a, b) => {
-      let valA = a[colKey] !== undefined ? a[colKey] : '';
-      let valB = b[colKey] !== undefined ? b[colKey] : '';
-      if (typeof valA === 'string') valA = valA.toLowerCase();
-      if (typeof valB === 'string') valB = valB.toLowerCase();
-      if (valA < valB) return sortAsc ? -1 : 1;
-      if (valA > valB) return sortAsc ? 1 : -1;
-      return 0;
-    });
-    page = 0;
-    render();
-  }
-
-  function filter(filterArgs) {
-    filtered = items.filter(item => filterFn(item, filterArgs));
-    page = 0;
-    render();
-    return filtered.length;
-  }
-
-  function render() {
+  async function render() {
     const el = document.getElementById(containerId);
     if (!el) return;
-    const total = filtered.length;
-    const pages = Math.ceil(total / pageSize) || 1;
+    const mySeq = ++seq;
+    const params = { page, pageSize, ...args };
+    if (sortBy) { params.sort = sortBy; params.dir = sortAsc ? 'asc' : 'desc'; }
+    if (!el.querySelector('table')) el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    const res = await fetchJSON(urlFn(params));
+    if (mySeq !== seq) return;                    // a newer request superseded this one
+    if (!res) {
+      el.innerHTML = '<div class="empty">Error fetching data.</div>';
+      toast('Failed to load data from the server.', 'err');
+      return;
+    }
+    total = res.total || 0;
+    page = res.page || 0;
+    const items = res.items || [];
     const start = page * pageSize;
-    const slice = filtered.slice(start, start + pageSize);
+    const pages = Math.ceil(total / pageSize) || 1;
 
     let h = `<table><thead><tr>`;
     columns.forEach(col => {
@@ -102,19 +182,13 @@ function makePagedTable(containerId, items, columns, renderRowFn, filterFn, page
       h += `<th style="${col.style || ''}" onclick="_tblSort(${id}, '${col.key}')">${col.label}${arrow}</th>`;
     });
     h += `</tr></thead><tbody>`;
-
-    if (slice.length === 0) {
+    if (!items.length) {
       h += `<tr><td colspan="${columns.length}" style="text-align:center;color:var(--muted);padding:2rem;">No matching items found.</td></tr>`;
     } else {
-      slice.forEach((item, index) => {
-        h += renderRowFn(item, start + index);
-      });
+      items.forEach((item, i) => { h += renderRowFn(item, start + i, args); });
     }
-    h += `</tbody></table>`;
-
-    // Pagination
-    h += `<div class="tbl-foot">`;
-    h += `<span>Showing ${total === 0 ? 0 : start + 1}–${Math.min(start + pageSize, total)} of ${total} entries</span>`;
+    h += `</tbody></table><div class="tbl-foot">`;
+    h += `<span>Showing ${total === 0 ? 0 : start + 1}–${Math.min(start + pageSize, total)} of ${total.toLocaleString()} entries</span>`;
     if (pages > 1) {
       h += `<div style="display:flex;gap:4px;">`;
       h += `<button class="btn btn-sm" onclick="_tblPage(${id}, 'prev')" ${page === 0 ? 'disabled' : ''}>Prev</button>`;
@@ -122,18 +196,58 @@ function makePagedTable(containerId, items, columns, renderRowFn, filterFn, page
       h += `</div>`;
     }
     h += `</div>`;
-
     el.innerHTML = h;
+    if (opts.onTotal) opts.onTotal(total);
   }
 
+  function filter(newArgs) {
+    args = { ...args, ...newArgs };
+    page = 0;
+    clearTimeout(timer);
+    timer = setTimeout(render, 200);              // debounce typing
+  }
+
+  // One live table per container: drop the previous one's registry entry.
+  for (const k of Object.keys(_pagRegistry)) {
+    if (_pagRegistry[k].containerId === containerId) delete _pagRegistry[k];
+  }
   _pagRegistry[id] = {
-    sortData,
+    containerId,
+    sortData(key) {
+      if (sortBy === key) sortAsc = !sortAsc; else { sortBy = key; sortAsc = true; }
+      page = 0; render();
+    },
     prev() { if (page > 0) { page--; render(); } },
-    next() { if (page < Math.ceil(filtered.length / pageSize) - 1) { page++; render(); } },
+    next() { if ((page + 1) * pageSize < total) { page++; render(); } },
     render
   };
+  return { render, filter, count: () => total };
+}
 
-  return { render, filter, count: () => filtered.length, items: () => filtered };
+// Single-column server-paged list over one target file (JS / Dorks / subs).
+function renderServerList(containerId, file, label, searchGetter) {
+  const q = (searchGetter() || '').toLowerCase();
+  const ctrl = makeServerTable(
+    containerId,
+    (p) => `/api/data/list?${new URLSearchParams({ target: currentTarget, file, ...p })}`,
+    [{ key: 'value', label }],
+    (v, _i, a) => `<tr><td class="wrap-cell">${hilite(v, a.q || '')}</td></tr>`,
+    { args: { q } }
+  );
+  ctrl.render();
+  return { render: ctrl.render, filter: (text) => ctrl.filter({ q: text }), count: ctrl.count };
+}
+
+// Fill tab badges from server line counts: {elementId: relativeFile}.
+async function fillTabCounts(map) {
+  const files = [...new Set(Object.values(map))];
+  const res = await fetchJSON(`/api/data/counts?${new URLSearchParams({ target: currentTarget, files: files.join(',') })}`);
+  const counts = res?.counts || {};
+  for (const [elId, file] of Object.entries(map)) {
+    const el = document.getElementById(elId);
+    if (el) el.textContent = (counts[file] || 0).toLocaleString();
+  }
+  return counts;
 }
 
 window._tblSort = (id, key) => _pagRegistry[id]?.sortData(key);
@@ -161,7 +275,138 @@ async function loadExplorer() {
   allTargets = data?.targets || [];
   renderTargets(allTargets);
   checkScanStatus();
+  loadScanTracker();
+  startScanTrackerPoll();
 }
+
+// ── Explorer scan tracker (live multi-target run board) ──
+let scanTrackerTimer = null;
+let scanDetailTarget = null;
+let scanDetailTimer = null;
+
+function _fmtElapsed(sec) {
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60), s = sec % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+function _explorerVisible() {
+  const el = document.getElementById('explorer-screen');
+  return el && el.offsetParent !== null;
+}
+
+async function loadScanTracker() {
+  const panel = document.getElementById('scan-tracker');
+  const grid = document.getElementById('scan-tracker-grid');
+  const meta = document.getElementById('scan-tracker-meta');
+  if (!panel || !grid) return false;
+  const data = await fetchJSON('/api/scans/active');
+  const runs = data?.runs || [];
+  if (!runs.length) { panel.hidden = true; return false; }
+  panel.hidden = false;
+  const active = data.active || 0;
+  meta.textContent = `${active} running · cap ${data.max_concurrent}`;
+
+  let h = '';
+  runs.forEach(r => {
+    const running = r.running;
+    const failed = !running && r.returncode && r.returncode !== 0;
+    const state = running ? 'running' : (failed ? 'failed' : 'done');
+    const pct = running ? (r.progress_percent || 0) : 100;
+    h += `<div class="scan-card ${running ? 'running' : ''}" onclick="openScanDetail(${jsq(r.target)})">`;
+    h += `<div class="scan-card-top">`;
+    h += `<span class="scan-dot ${state}"></span>`;
+    h += `<span class="scan-card-host">${esc(r.domain || r.target)}</span>`;
+    h += `<span class="scan-card-kind">${esc(r.kind || 'scan')}</span>`;
+    h += `</div>`;
+    h += `<div class="scan-card-step">${esc(running ? (r.current_step || 'Working…') : (failed ? 'Stopped / failed' : 'Completed'))}</div>`;
+    h += `<div class="scan-prog"><div class="scan-prog-fill ${failed ? 'failed' : (running ? '' : 'done')}" style="width:${pct}%"></div></div>`;
+    h += `<div class="scan-card-foot"><span>${_fmtElapsed(r.elapsed)}</span><span>${running ? pct + '%' : (failed ? 'code ' + r.returncode : 'done')}</span></div>`;
+    h += `</div>`;
+  });
+  grid.innerHTML = h;
+  return runs.some(r => r.running);
+}
+
+function startScanTrackerPoll() {
+  if (scanTrackerTimer) return;
+  scanTrackerTimer = setInterval(async () => {
+    if (document.hidden) return;                 // no polling while backgrounded
+    if (!_explorerVisible()) { stopScanTrackerPoll(); return; }
+    const anyRunning = await loadScanTracker();
+    // Keep polling while runs are active OR the detail drawer is open.
+    if (!anyRunning && !scanDetailTarget) stopScanTrackerPoll();
+  }, 2500);
+}
+function stopScanTrackerPoll() {
+  if (scanTrackerTimer) { clearInterval(scanTrackerTimer); scanTrackerTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (scanDetailTarget) refreshScanDetail();
+});
+
+window.openScanDetail = function(target) {
+  scanDetailTarget = target;
+  document.getElementById('scan-detail').classList.add('open');
+  document.getElementById('scan-detail-host').textContent = target;
+  refreshScanDetail();
+  if (scanDetailTimer) clearInterval(scanDetailTimer);
+  scanDetailTimer = setInterval(() => { if (!document.hidden) refreshScanDetail(); }, 2000);
+  startScanTrackerPoll();
+};
+
+window.closeScanDetail = function() {
+  document.getElementById('scan-detail').classList.remove('open');
+  scanDetailTarget = null;
+  if (scanDetailTimer) { clearInterval(scanDetailTimer); scanDetailTimer = null; }
+};
+
+async function refreshScanDetail() {
+  if (!scanDetailTarget) return;
+  const prog = await fetchJSON(`/api/scan/progress?target=${encodeURIComponent(scanDetailTarget)}`);
+  if (!prog) return;
+  const sub = document.getElementById('scan-detail-sub');
+  const stopBtn = document.getElementById('scan-detail-stop');
+  const done = (prog.stages || []).filter(s => s.status === 'done').length;
+  sub.textContent = `${prog.running ? 'Running' : 'Idle'} · ${done}/${(prog.stages || []).length} stages · ${prog.progress_percent || 0}%`;
+  if (stopBtn) stopBtn.hidden = !prog.running;
+
+  const tl = document.getElementById('scan-detail-timeline');
+  let h = '';
+  (prog.stages || []).forEach(s => {
+    const mark = s.status === 'done' ? '✓' : (s.status === 'active' ? '' : '');
+    const dur = s.seconds != null ? `${s.seconds}s` : '';
+    h += `<div class="stage-row ${s.status}">`;
+    h += `<span class="stage-mark">${mark}</span>`;
+    h += `<span class="stage-label">${esc(s.label)}</span>`;
+    h += `<span class="stage-dur">${dur}</span>`;
+    h += `</div>`;
+  });
+  tl.innerHTML = h;
+
+  const logEl = document.getElementById('scan-detail-log');
+  const wasBottom = isNearBottom(logEl);
+  logEl.textContent = (prog.log_tail || []).join('\n');
+  if (wasBottom) logEl.scrollTop = logEl.scrollHeight;
+
+  if (!prog.running && scanDetailTimer) {
+    // one final paint, then stop polling the detail view
+    clearInterval(scanDetailTimer); scanDetailTimer = null;
+  }
+}
+
+window.stopScanTarget = async function(target, btn) {
+  if (!target) return;
+  if (btn) btn.disabled = true;
+  const res = await postJSON('/api/scan/stop', { target });
+  toast(res?.message || 'Stop requested', res?.ok ? 'ok' : 'err');
+  loadScanTracker();
+  refreshScanDetail();
+};
 
 function renderTargets(targets) {
   const el = document.getElementById('targets-container');
@@ -175,7 +420,7 @@ function renderTargets(targets) {
     const date = t.scan_date ? new Date(t.scan_date).toLocaleDateString() : '';
     const mon = t.monitor_enabled;
 
-    h += `<div class="target-card" onclick="openTarget('${esc(t.name)}')">`;
+    h += `<div class="target-card" onclick="openTarget(${jsq(t.name)})">`;
     h += `<div class="tc-info">`;
     h += `<div class="tc-domain">${esc(t.domain || t.name)}</div>`;
     h += `<div class="tc-stats">`;
@@ -186,9 +431,9 @@ function renderTargets(targets) {
     if (s.dork_findings) h += `<span>Dorks: <b style="color:var(--accent)">${s.dork_findings}</b></span>`;
     h += `</div></div>`;
     h += `<div class="tc-actions">`;
-    h += `<button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); openTarget('${esc(t.name)}')">Open</button>`;
+    h += `<button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); openTarget(${jsq(t.name)})">Open</button>`;
     h += `<label class="chk-label" onclick="event.stopPropagation()">`;
-    h += `<input type="checkbox" ${mon ? 'checked' : ''} onchange="event.stopPropagation(); toggleMonitor('${esc(t.name)}', this.checked)"/> Monitor`;
+    h += `<input type="checkbox" ${mon ? 'checked' : ''} onchange="event.stopPropagation(); toggleMonitor(${jsq(t.name)}, this.checked)"/> Monitor`;
     h += `</label>`;
     h += `</div></div>`;
   }
@@ -220,6 +465,8 @@ window.switchView = function(viewId) {
     renderOverview();
   } else if (viewId === 'triage') {
     renderTriageList();
+  } else if (viewId === 'triagereport') {
+    loadTriageReport();
   } else if (viewId === 'assets') {
     loadAssetsSection();
   } else if (viewId === 'webapps') {
@@ -283,13 +530,20 @@ window.openTarget = async function(name) {
     document.getElementById('topbar-domain').textContent = stats.domain || name;
     document.getElementById('topbar-date').textContent = stats.scan_date ? new Date(stats.scan_date).toLocaleDateString() : '--';
     populateSidebarBadges(stats.statistics);
+  } else {
+    toast(`Could not load stats for ${name}.`, 'err');
   }
 
-  // Pre-load critical Hunt Queue data asynchronously
-  await compileHuntQueue();
+  // Load persisted triage state (star/ignore) from the server
+  await loadTriageState();
 
-  // Go to default triage-first dashboard (Overview)
-  switchView('overview');
+  // Pre-load the tiered Hunt Queue from the unified finding model
+  await loadFindings();
+
+  // Triage-first: land directly in the Hunt Queue cockpit
+  selectedHost = null;
+  triageCursor = -1;
+  switchView('triage');
 };
 
 function populateSidebarBadges(s) {
@@ -334,7 +588,7 @@ function renderOverview() {
   // Render overview top interesting assets (High / Med priority queue items)
   const topAssetsContainer = document.getElementById('overview-top-assets');
   const interesting = huntQueueItems
-    .filter(item => !localStorage.getItem(getIgnoreKey(item.host)))
+    .filter(item => !isIgnored(item.host))
     .filter(item => item.priority === 'HIGH' || item.priority === 'MED')
     .slice(0, 8);
 
@@ -343,11 +597,11 @@ function renderOverview() {
   } else {
     let ah = '';
     interesting.forEach(item => {
-      const starred = localStorage.getItem(getStarKey(item.host)) === 'true';
+      const starred = isStarred(item.host);
       const findings = item.findings || [];
-      // Group findings by severity for the overview header line
-      const critCount = findings.filter(f => f.sev === 'crit').length;
-      const highCount = findings.filter(f => f.sev === 'high').length;
+      // Group findings by tier for the overview header line
+      const critCount = findings.filter(f => (f.tier || '') === 'confirmed').length;
+      const highCount = findings.filter(f => (f.tier || '') === 'suspicious').length;
 
       ah += `<div class="overview-asset-card">`;
 
@@ -356,10 +610,10 @@ function renderOverview() {
       ah += `<div class="triage-priority ${item.priority.toLowerCase()}">${item.priority}</div>`;
       ah += `<a href="${esc(item.url)}" target="_blank" class="triage-host" style="font-size:13px;">${esc(item.host)}</a>`;
       if (item.status_code) ah += sBadge(item.status_code);
-      if (critCount) ah += `<span class="finding-count-badge sev-crit">${critCount} crit</span>`;
-      if (highCount) ah += `<span class="finding-count-badge sev-high">${highCount} high</span>`;
+      if (critCount) ah += `<span class="finding-count-badge sev-crit">${critCount} confirmed</span>`;
+      if (highCount) ah += `<span class="finding-count-badge sev-high">${highCount} suspicious</span>`;
       ah += `<div style="flex:1"></div>`;
-      ah += `<button class="btn btn-sm btn-star ${starred ? 'active' : ''}" onclick="toggleTriageStar('${esc(item.host)}', this); event.stopPropagation();">★</button>`;
+      ah += `<button class="btn btn-sm btn-star ${starred ? 'active' : ''}" onclick="toggleTriageStar(${jsq(item.host)}, this); event.stopPropagation();">★</button>`;
       ah += `<button class="btn btn-sm" onclick="switchView('triage')" style="font-size:10px;">full queue</button>`;
       ah += `</div>`;
 
@@ -368,13 +622,14 @@ function renderOverview() {
         const SEV_ORDER = { crit: 4, high: 3, med: 2, low: 1 };
         const sorted = [...findings].sort((a, b) => (SEV_ORDER[b.sev] || 0) - (SEV_ORDER[a.sev] || 0));
         ah += `<div class="overview-asset-findings">`;
-        sorted.slice(0, 5).forEach(f => ah += renderFindingChip(f, true));
-        if (findings.length > 5) {
-          ah += `<span class="finding-more">+${findings.length - 5} more</span>`;
+        const groups = groupFindings(sorted);
+        groups.slice(0, 5).forEach(g => ah += renderFindingChip(g.head, true, g.members.length));
+        if (groups.length > 5) {
+          ah += `<span class="finding-more">+${groups.length - 5} more</span>`;
         }
         ah += `</div>`;
       } else {
-        const titleInfo = item.title ? ` — ${item.title}` : '';
+        const titleInfo = item.title ? ` — ${esc(item.title)}` : '';
         ah += `<div class="overview-asset-findings"><span style="color:var(--muted);font-size:11px;">No detailed findings${titleInfo}</span></div>`;
       }
 
@@ -383,8 +638,72 @@ function renderOverview() {
     topAssetsContainer.innerHTML = ah;
   }
 
-  // Load latest monitor change summary
+  // Load latest monitor change summary + scan-history ribbon
   loadOverviewMonitorSummary();
+  loadOverviewScanSummary();
+}
+
+// ── Overview scan-summary ribbon: "time & scans done", compact ──
+function _relTime(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return '—';
+  const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  const days = Math.floor(s / 86400);
+  return days < 30 ? days + 'd ago' : d.toLocaleDateString();
+}
+function _fmtDur(min) {
+  const m = Number(min);
+  if (!isFinite(m) || m <= 0) return '<1m';
+  if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60);
+  return h + 'h' + (m % 60 ? ' ' + (m % 60) + 'm' : '');
+}
+
+async function loadOverviewScanSummary() {
+  const el = document.getElementById('overview-scan-ribbon');
+  if (!el) return;
+  const data = await fetchJSON(`/api/scans?target=${encodeURIComponent(currentTarget)}`);
+  const scans = (data?.scans || []).filter(s => s && s.timestamp);
+  if (!scans.length) { el.hidden = true; return; }
+  el.hidden = false;
+
+  // scans arrive newest-first; latest + averages
+  const latest = scans[0];
+  const durs = scans.map(s => Number(s.duration_minutes)).filter(d => isFinite(d) && d > 0);
+  const avg = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0;
+
+  const item = (val, lbl) => `<div class="sr-item"><span class="sr-val">${esc(String(val))}</span><span class="sr-lbl">${esc(lbl)}</span></div>`;
+  let h = '';
+  h += item(scans.length, scans.length === 1 ? 'scan' : 'scans');
+  h += `<div class="sr-sep"></div>`;
+  h += item(_relTime(latest.timestamp), 'last run');
+  h += `<div class="sr-sep"></div>`;
+  h += item(_fmtDur(latest.duration_minutes), 'duration');
+  if (avg && scans.length > 1) {
+    h += `<div class="sr-sep"></div>`;
+    h += item(_fmtDur(avg), 'avg');
+  }
+
+  // Tiny inline bar chart of the last up-to-10 scan durations (oldest→newest).
+  const recent = scans.slice(0, 10).reverse();
+  const rdurs = recent.map(s => Math.max(0, Number(s.duration_minutes) || 0));
+  const max = Math.max(1, ...rdurs);
+  if (recent.length > 1) {
+    h += `<div class="sr-spark" title="Recent scan durations (oldest → newest)">`;
+    h += `<span class="sr-spark-lbl">trend</span>`;
+    recent.forEach((s, i) => {
+      const pct = Math.round((rdurs[i] / max) * 100);
+      const last = i === recent.length - 1 ? ' sr-last' : '';
+      const when = new Date(s.timestamp);
+      const tip = `${_fmtDur(s.duration_minutes)} · ${isNaN(when) ? '' : when.toLocaleString()}`;
+      h += `<div class="sr-bar${last}" style="height:${Math.max(2, pct * 0.22)}px" title="${esc(tip)}"></div>`;
+    });
+    h += `</div>`;
+  }
+  el.innerHTML = h;
 }
 
 async function loadOverviewMonitorSummary() {
@@ -429,7 +748,200 @@ function makeFinding(type, label, url = null) {
   return { type, label, url, ...FINDING_DEFS[type] };
 }
 
-// ── Hunt Queue Engine ──
+// ══════════════════════════════════════════════════════════════════
+// Unified finding model — frontend (Phase 3)
+// The Hunt Queue + dossier are driven by server /api/findings (tiered),
+// falling back to the legacy file-based compileHuntQueue() only if the
+// server returns nothing (resilience).
+// ══════════════════════════════════════════════════════════════════
+let findingsRaw = [];
+let findingsCounts = {};
+
+// tier → visual weight (reusing existing sev-* chip colors; NOT severity)
+const TIER_SEV = { confirmed: 'crit', suspicious: 'high', observation: 'low' };
+const TIER_ORDER = ['confirmed', 'suspicious', 'observation'];
+const FTYPE_ICON = {
+  secret: 'SEC', 'info-leak': 'LEAK', 'exposed-file': 'FILE', 'sensitive-file': 'FILE',
+  bucket: 'BKT', 'access-control-signal': 'ACL', 'auth-surface': 'AUTH',
+  'tech-fingerprint': 'TECH', 'sensitive-host': 'SDOM', 'web-service': 'WEB',
+  'open-port': 'PORT', 'source-map': 'MAP', websocket: 'WS', endpoint: 'EP',
+  'api-endpoint': 'API', 'api-path': 'API', 'interesting-param': 'PARAM',
+  'historical-url': 'HIST', change: 'CHG', 'service-banner': 'SVC', 'shared-infra': 'INFRA',
+  comment: 'NOTE',
+};
+// 'confirmed' = a human (or the triage-results skill) verified the signal live.
+const VERDICTS = ['new', 'reviewing', 'interesting', 'confirmed', 'reported', 'false_positive', 'wont_fix'];
+const SEVERITIES = ['', 'info', 'low', 'medium', 'high', 'critical'];
+
+function mapFinding(f) {
+  return {
+    type: f.type,
+    label: f.title || f.url || f.type,
+    url: f.url || '',
+    tier: f.tier,
+    sev: TIER_SEV[f.tier] || 'low',
+    icon: FTYPE_ICON[f.type] || (f.type || '?').slice(0, 4).toUpperCase(),
+    fingerprint: f.fingerprint,
+    source: f.source,
+    detector: f.detector,
+    score: f.score || 0,
+    score_detail: f.score_detail || {},
+    verdict: f.verdict || 'new',
+    severity: f.severity || '',
+    evidence: f.evidence || {},
+  };
+}
+
+function buildQueueFromFindings(findings, assets) {
+  assets = assets || {};
+  const byAsset = {};
+  findings.forEach(f => {
+    const a = f.asset || '(unattributed)';
+    (byAsset[a] = byAsset[a] || []).push(mapFinding(f));
+  });
+  const items = Object.entries(byAsset).map(([host, fs]) => {
+    const web = fs.find(f => f.type === 'web-service');
+    const tech = fs.find(f => f.type === 'tech-fingerprint');
+    // Priority/score/reasons are computed server-side (db.score_assets) so the
+    // correlation logic stays in one place. Fall back to a local estimate only
+    // if the server map is missing this asset.
+    const a = assets[host];
+    let priority, score, reasons;
+    if (a) {
+      priority = a.priority; score = a.score; reasons = a.reasons || [];
+    } else {
+      score = fs.reduce((m, f) => Math.max(m, f.score), 0);
+      priority = score >= 8 ? 'HIGH' : score >= 4 ? 'MED' : 'LOW';
+      reasons = [];
+    }
+    const withUrl = fs.find(f => f.url);
+    const statusF = fs.find(f => f.evidence && f.evidence.status_code);
+    return {
+      host,
+      url: (web && web.url) || (withUrl && withUrl.url) || ('http://' + host),
+      title: (web && web.evidence && web.evidence.title) || '',
+      status_code: (web && web.evidence && web.evidence.status_code) || (statusF && statusF.evidence.status_code) || null,
+      tech: (tech && tech.evidence && tech.evidence.tech) || [],
+      findings: fs,
+      priority,
+      score,
+      reasons,
+    };
+  });
+  const pm = { HIGH: 3, MED: 2, LOW: 1 };
+  items.sort((a, b) => (pm[b.priority] - pm[a.priority]) || (b.score - a.score) || (b.findings.length - a.findings.length));
+  return items;
+}
+
+// One compact server row per asset -> queue item. `findings` starts as a short
+// preview (enough for the list chips); the dossier fetches the asset's full
+// findings on demand (`partial` until then).
+function assetToItem(a) {
+  return {
+    host: a.host,
+    url: a.url,
+    title: a.title || '',
+    status_code: a.status_code || null,
+    tech: a.tech || [],
+    priority: a.priority,
+    score: a.score,
+    reasons: a.reasons || [],
+    n: a.n || 0,
+    tiers: a.tiers || {},
+    dismissed: !!a.dismissed,
+    findings: (a.preview || []).map(mapFinding),
+    partial: true,
+    screenshot: a.screenshot || null,
+  };
+}
+
+async function loadFindings() {
+  const url = `/api/findings/assets?target=${encodeURIComponent(currentTarget)}`;
+  let res = await fetchJSON(url);
+  let assets = res?.assets || [];
+  findingsCounts = res?.counts || {};
+
+  // Auto-heal: a target may not be ingested yet. Ingest once, then refetch.
+  if (!assets.length) {
+    const ing = await postJSON('/api/db/ingest', { target: currentTarget });
+    if (ing?.ok) {
+      res = await fetchJSON(url);
+      assets = res?.assets || [];
+      findingsCounts = res?.counts || {};
+    } else if (ing && ing.ok === false) {
+      toast('Could not ingest scan data: ' + (ing.error || 'unknown error'), 'warn');
+    }
+  }
+
+  // Last-resort fallback: legacy client-side scoring from raw files.
+  if (!assets.length) {
+    await compileHuntQueue();
+    updateTierSummary();
+    return;
+  }
+
+  findingsRaw = [];
+  triageSearchHosts = null;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
+  huntQueueItems = assets.map(assetToItem);
+
+  const activeTriage = huntQueueItems.filter(it => !isIgnored(it.host));
+  document.getElementById('badge-triage').textContent = activeTriage.length;
+  updateTierSummary();
+}
+
+function updateTierSummary() {
+  const el = document.getElementById('triage-tier-summary');
+  if (!el) return;
+  const c = findingsCounts || {};
+  const pill = (tier, n, label) => {
+    const active = triageTierFilter === tier ? ' active' : '';
+    return `<span class="tier-pill tier-${tier}${active}" role="button" tabindex="0" onclick="filterTriageTier('${tier}')" title="Filter: ${label}">${n} ${label}</span>`;
+  };
+  const parts = [];
+  if (c.confirmed) parts.push(pill('confirmed', c.confirmed, 'confirmed'));
+  if (c.suspicious) parts.push(pill('suspicious', c.suspicious, 'suspicious'));
+  if (c.observation) parts.push(pill('observation', c.observation, 'obs'));
+  el.innerHTML = parts.join('');
+}
+
+window.filterTriageTier = (tier) => {
+  // click an active pill again to clear the filter
+  triageTierFilter = (triageTierFilter === tier) ? 'all' : tier;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
+  updateTierSummary();
+  renderTriageList();
+};
+
+window.toggleHideDismissed = (checked) => {
+  triageHideDismissed = checked;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
+  renderTriageList();
+};
+
+window.setFindingState = async (fp, field, value, quiet = false) => {
+  const res = await postJSON('/api/finding/state', { target: currentTarget, fingerprint: fp, [field]: value });
+  if (!res?.ok) { toast('Failed to save ' + field, 'err'); return false; }
+  // keep local copies in sync so re-renders reflect the change
+  findingsRaw.forEach(f => { if (f.fingerprint === fp) f[field] = value; });
+  huntQueueItems.forEach(it => {
+    let hit = false;
+    (it.findings || []).forEach(f => { if (f.fingerprint === fp) { f[field] = value; hit = true; } });
+    if (hit && !it.partial) it.dismissed = itemDismissed(it);
+  });
+  if (!quiet) toast(`${field} → ${value || 'unrated'}`, 'ok', 1500);
+  return true;
+};
+
+// Grouped dossier rows carry every duplicate's fingerprint (comma-joined).
+window.setFindingStateMany = async (fps, field, value) => {
+  const list = String(fps || '').split(',').filter(Boolean);
+  let ok = 0;
+  for (const fp of list) if (await window.setFindingState(fp, field, value, true)) ok++;
+  if (ok) toast(`${field} → ${value || 'unrated'}${list.length > 1 ? ' (' + ok + ' grouped)' : ''}`, 'ok', 1500);
+};
+
+// ── Hunt Queue Engine (legacy file-based fallback) ──
 async function compileHuntQueue() {
   huntQueueItems = [];
 
@@ -698,19 +1210,131 @@ async function compileHuntQueue() {
     return pd !== 0 ? pd : b.findings.length - a.findings.length;
   });
 
-  const activeTriage = huntQueueItems.filter(item => !localStorage.getItem(getIgnoreKey(item.host)));
+  const activeTriage = huntQueueItems.filter(item => !isIgnored(item.host));
   document.getElementById('badge-triage').textContent = activeTriage.length;
 }
 
-function renderFindingChip(f, linkable = false) {
-  const def = FINDING_DEFS[f.type] || { icon: '?', sev: 'low' };
-  const cls = `finding-chip sev-${def.sev}`;
-  const icon = `<span class="finding-icon">${def.icon}</span>`;
-  const label = linkable && f.url
-    ? `<a href="${esc(f.url)}" target="_blank" class="finding-link">${esc(f.label)}</a>`
-    : `<span>${esc(f.label)}</span>`;
-  return `<div class="${cls}">${icon}${label}</div>`;
+// ── Evidence formatting ──
+// Findings can carry raw scanner lines (minified JS, long URLs, SVG strings).
+// Split them into {source, preview, raw}: the preview is a short single line
+// for the list, the raw text stays available behind an expandable <details>.
+const PREVIEW_MAX = 140;
+const RAW_MAX = 4000;
+
+function _collapseWs(s) { return String(s || '').replace(/\s+/g, ' ').trim(); }
+
+function _truncMid(s, n) {
+  if (s.length <= n) return s;
+  const head = Math.ceil(n * 0.65), tail = n - head - 1;
+  return s.slice(0, head) + '…' + s.slice(s.length - tail);
 }
+
+function splitEvidence(f) {
+  const ev = f.evidence || {};
+  let raw = String(ev.match || f.label || f.url || '');
+  let source = ev.source || '';
+  let content = raw;
+  // Scanner lines look like "[<url-or-file>:<line>] [Type] match" or
+  // "[<url-or-file>:<line>] // comment" — pull the location out.
+  const m = /^\[([^\]\s]+?)(?::(\d+))?\]\s*(.*)$/s.exec(raw);
+  if (m && !source) {
+    source = m[2] ? `${m[1]}:${m[2]}` : m[1];
+    content = m[3];
+  }
+  let kind = '';
+  const k = /^\[([^\]]{1,40})\]\s*(.*)$/s.exec(content);
+  if (k) { kind = k[1]; content = k[2]; }
+  // Titles from the server may embed the raw line; prefer the parsed content.
+  let text = _collapseWs(content) || _collapseWs(f.label);
+  if (f.url && text === f.url) source = source || '';
+  const isUrl = /^[a-z]+:\/\//i.test(text);
+  const preview = isUrl ? _truncMid(text, PREVIEW_MAX) : (text.length > PREVIEW_MAX ? text.slice(0, PREVIEW_MAX) + '…' : text);
+  return {
+    kind,
+    source,
+    preview: (kind ? kind + ': ' : '') + preview,
+    raw: raw.length > RAW_MAX ? raw.slice(0, RAW_MAX) + `\n… (${(raw.length - RAW_MAX).toLocaleString()} more chars — see raw files)` : raw,
+    long: raw.length > PREVIEW_MAX || /\n/.test(raw),
+  };
+}
+
+// Group identical evidence (same type + same normalized preview) so repeated
+// hits across files/URLs show once with a count instead of N copies.
+function groupFindings(fs) {
+  const groups = new Map();
+  fs.forEach(f => {
+    const e = splitEvidence(f);
+    const key = (f.type || '') + '|' + (f.tier || '') + '|' + e.preview.toLowerCase();
+    let g = groups.get(key);
+    if (!g) {
+      g = { key, head: f, ev: e, members: [], sources: new Set() };
+      groups.set(key, g);
+    }
+    g.members.push(f);
+    if (e.source) g.sources.add(e.source);
+    if (f.url && f.url !== e.source) g.sources.add(f.url);
+    if ((f.score || 0) > (g.head.score || 0)) { g.head = f; g.ev = e; }
+  });
+  return [...groups.values()];
+}
+
+function renderFindingChip(f, linkable = false, count = 1) {
+  const def = FINDING_DEFS[f.type] || {};
+  const sev = f.sev || def.sev || 'low';
+  const icon = f.icon || def.icon || '?';
+  const cls = `finding-chip sev-${sev}`;
+  const e = splitEvidence(f);
+  const title = esc(e.preview);
+  const label = linkable && f.url
+    ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" class="finding-link" title="${title}" onclick="event.stopPropagation()">${esc(e.preview)}</a>`
+    : `<span class="finding-text" title="${title}">${esc(e.preview)}</span>`;
+  const cnt = count > 1 ? `<span class="finding-count">×${count}</span>` : '';
+  return `<div class="${cls}"><span class="finding-icon">${icon}</span>${label}${cnt}</div>`;
+}
+
+// Expandable evidence block for the dossier: short summary, full detail inside.
+function renderFindingGroup(g) {
+  const f = g.head;
+  const n = g.members.length;
+  const srcs = [...g.sources];
+  let h = `<details class="f-group">`;
+  h += `<summary>${renderFindingChip(f, false, n)}</summary>`;
+  h += `<div class="f-detail">`;
+  const sd = f.score_detail || {};
+  if (Array.isArray(sd.reasons) && sd.reasons.length) {
+    h += `<div class="f-detail-lbl">Score ${esc(String(f.score || 0))}</div><ul class="f-reasons">`;
+    sd.reasons.forEach(r => h += `<li>${esc(r)}</li>`);
+    h += `</ul>`;
+  }
+  if (srcs.length) {
+    h += `<div class="f-detail-lbl">Source${srcs.length > 1 ? 's (' + srcs.length + ')' : ''}</div><ul class="f-sources">`;
+    srcs.slice(0, 25).forEach(s => {
+      const link = /^https?:\/\//i.test(s) ? `<a href="${esc(s.replace(/:\d+$/, ''))}" target="_blank" rel="noopener">${esc(s)}</a>` : esc(s);
+      h += `<li>${link}</li>`;
+    });
+    if (srcs.length > 25) h += `<li class="finding-more">+${srcs.length - 25} more</li>`;
+    h += `</ul>`;
+  }
+  h += `<div class="f-detail-lbl">Evidence${n > 1 ? ' (first of ' + n + ')' : ''}</div>`;
+  h += `<pre class="f-raw">${esc(g.ev.raw)}</pre>`;
+  h += `</div></details>`;
+  return h;
+}
+
+function itemHasTier(item, tier) {
+  if (item.tiers) return (item.tiers[tier] || 0) > 0;
+  return (item.findings || []).some(f => (f.tier || 'observation') === tier);
+}
+
+function itemDismissed(item) {
+  if (item.partial) return !!item.dismissed;
+  return !(item.findings || []).some(f => !DISMISSED_VERDICTS.includes(f.verdict || 'new'));
+}
+
+window.triageShowMore = () => {
+  triageRenderLimit += TRIAGE_RENDER_STEP * 2;
+  renderTriageList();
+};
 
 function renderTriageList() {
   const container = document.getElementById('triage-list-container');
@@ -719,7 +1343,7 @@ function renderTriageList() {
   // 1. Priority filters
   if (triagePriorityFilter !== 'all') {
     if (triagePriorityFilter === 'starred') {
-      filtered = filtered.filter(item => localStorage.getItem(getStarKey(item.host)) === 'true');
+      filtered = filtered.filter(item => isStarred(item.host));
     } else {
       filtered = filtered.filter(item => item.priority.toLowerCase() === triagePriorityFilter);
     }
@@ -727,36 +1351,53 @@ function renderTriageList() {
 
   // 2. Hide ignored
   if (triageHideIgnored) {
-    filtered = filtered.filter(item => localStorage.getItem(getIgnoreKey(item.host)) !== 'true');
+    filtered = filtered.filter(item => !isIgnored(item.host));
   }
 
-  // 3. Text search — also searches findings labels
+  // 3. Text search — also searches findings labels (all of them: labels not
+  //    loaded in the browser are matched server-side, see filterTriageText)
   if (triageTextFilter) {
     const q = triageTextFilter.toLowerCase();
+    const remote = (triageSearchFor === q) ? triageSearchHosts : null;
     filtered = filtered.filter(item =>
       item.host.toLowerCase().includes(q) ||
       item.title.toLowerCase().includes(q) ||
       item.tech.join(' ').toLowerCase().includes(q) ||
-      (item.findings || []).some(f => f.label.toLowerCase().includes(q))
+      (item.findings || []).some(f => f.label.toLowerCase().includes(q)) ||
+      (remote && remote.has(item.host))
     );
   }
 
+  // 4. Tier filter — asset must have at least one finding of the chosen tier
+  if (triageTierFilter !== 'all') {
+    filtered = filtered.filter(item => itemHasTier(item, triageTierFilter));
+  }
+
+  // 5. Hide dismissed — hide assets whose findings are ALL false-positive/wont-fix
+  if (triageHideDismissed) {
+    filtered = filtered.filter(item => !itemDismissed(item));
+  }
+
+  triageVisible = filtered;
+
   if (filtered.length === 0) {
     container.innerHTML = '<div class="empty">No hunt queue items matching current filters.</div>';
+    triageCursor = -1;
     return;
   }
 
   let h = '';
-  filtered.forEach(item => {
-    const starred = localStorage.getItem(getStarKey(item.host)) === 'true';
-    const ignored = localStorage.getItem(getIgnoreKey(item.host)) === 'true';
+  filtered.slice(0, triageRenderLimit).forEach((item, idx) => {
+    const starred = isStarred(item.host);
+    const ignored = isIgnored(item.host);
     const findings = item.findings || [];
+    const sel = item.host === selectedHost ? ' selected' : '';
 
-    h += `<div class="triage-row${ignored ? ' triage-ignored' : ''}">`;
+    h += `<div class="triage-row${ignored ? ' triage-ignored' : ''}${sel}" data-host="${esc(item.host)}" data-idx="${idx}" tabindex="0" onclick="selectAsset(${jsq(item.host)})">`;
     h += `<div class="triage-priority ${item.priority.toLowerCase()}">${item.priority}</div>`;
     h += `<div class="triage-info">`;
     h += `<div class="triage-title-line">`;
-    h += `<a href="${esc(item.url)}" target="_blank" class="triage-host">${esc(item.host)}</a>`;
+    h += `<a href="${esc(item.url)}" target="_blank" rel="noopener" class="triage-host" onclick="event.stopPropagation()">${esc(item.host)}</a>`;
     if (item.status_code) h += sBadge(item.status_code);
     if (item.title) h += `<span class="triage-page-title">${esc(item.title)}</span>`;
     if (item.tech?.length) {
@@ -766,28 +1407,184 @@ function renderTriageList() {
     }
     h += `</div>`;
     if (findings.length) {
+      // Short, grouped preview in the list; full evidence lives in the dossier.
+      const groups = groupFindings(findings);
+      const ROW_MAX = 5;
       h += `<div class="triage-findings">`;
-      findings.forEach(f => h += renderFindingChip(f, true));
+      groups.slice(0, ROW_MAX).forEach(g => h += renderFindingChip(g.head, true, g.members.length));
+      const unseen = Math.max(0, (item.n || 0) - findings.length);
+      if (groups.length > ROW_MAX || unseen) {
+        const more = Math.max(0, groups.length - ROW_MAX) + unseen;
+        h += `<span class="finding-more">+${more} more — open dossier</span>`;
+      }
       h += `</div>`;
     }
     h += `</div>`;
 
     h += `<div class="triage-actions">`;
-    h += `<button class="btn btn-sm" onclick="copyToClipboard('${esc(item.url)}', this)">copy</button>`;
+    h += `<button class="btn btn-sm" onclick="event.stopPropagation(); copyToClipboard(${jsq(item.url)}, this)">copy</button>`;
     if (item.screenshot) {
-      h += `<button class="btn btn-sm" onclick="openLightbox('${esc(item.screenshot)}', '${esc(item.host)}')">ss</button>`;
+      h += `<button class="btn btn-sm" onclick="event.stopPropagation(); openLightbox(${jsq(item.screenshot)}, ${jsq(item.host)})">ss</button>`;
     }
-    h += `<button class="btn btn-sm btn-star ${starred ? 'active' : ''}" onclick="toggleTriageStar('${esc(item.host)}', this)">★</button>`;
-    h += `<button class="btn btn-sm btn-ignore ${ignored ? 'active' : ''}" onclick="toggleTriageIgnore('${esc(item.host)}', this)">ignore</button>`;
+    h += `<button class="btn btn-sm btn-star ${starred ? 'active' : ''}" onclick="event.stopPropagation(); toggleTriageStar(${jsq(item.host)}, this)" aria-label="Star ${esc(item.host)}">★</button>`;
+    h += `<button class="btn btn-sm btn-ignore ${ignored ? 'active' : ''}" onclick="event.stopPropagation(); toggleTriageIgnore(${jsq(item.host)}, this)">ignore</button>`;
     h += `</div>`;
     h += `</div>`;
   });
+  if (filtered.length > triageRenderLimit) {
+    const rest = filtered.length - triageRenderLimit;
+    h += `<div class="tbl-foot"><span>Showing ${triageRenderLimit} of ${filtered.length.toLocaleString()} assets</span>` +
+      `<button class="btn btn-sm" onclick="triageShowMore()">Show ${Math.min(rest, TRIAGE_RENDER_STEP * 2)} more</button></div>`;
+  }
   container.innerHTML = h;
+
+  // Keep selection/cursor coherent with the (re)rendered list
+  if (selectedHost) {
+    const i = filtered.findIndex(it => it.host === selectedHost);
+    triageCursor = i;
+    if (i >= 0) {
+      renderDossier(filtered[i]);
+      if (filtered[i].partial) loadAssetFindings(filtered[i]);
+    }
+  } else if (filtered.length && window.innerWidth > 1100) {
+    // Desktop: populate the dossier with the top asset on landing.
+    // (Skipped on narrow screens so the slide-over doesn't pop unbidden.)
+    selectAsset(filtered[0].host);
+  }
+}
+
+// ── Asset Dossier (Phase 1): everything known about one host, in one pane ──
+const SEV_RANK = { crit: 4, high: 3, med: 2, low: 1 };
+
+window.selectAsset = function(host) {
+  selectedHost = host;
+  const i = triageVisible.findIndex(it => it.host === host);
+  if (i >= 0) triageCursor = i;
+  // highlight the row
+  document.querySelectorAll('#triage-list-container .triage-row').forEach(r => {
+    r.classList.toggle('selected', r.getAttribute('data-host') === host);
+  });
+  const item = huntQueueItems.find(it => it.host === host);
+  renderDossier(item);
+  // on narrow screens the dossier is a slide-over
+  if (window.innerWidth <= 1100) document.getElementById('asset-dossier').classList.add('open');
+  if (item && item.partial) loadAssetFindings(item);
+};
+
+// Fetch the full findings (evidence, score detail) for one asset on demand.
+async function loadAssetFindings(item) {
+  if (item._loading) return;
+  item._loading = true;
+  const res = await fetchJSON(`/api/findings?${new URLSearchParams({ target: currentTarget, asset: item.host })}`);
+  item._loading = false;
+  if (!res || res.error) {
+    toast('Could not load findings for ' + item.host, 'err');
+    return;
+  }
+  item.findings = (res.findings || []).map(mapFinding);
+  item.partial = false;
+  item.dismissed = itemDismissed(item);
+  if (selectedHost === item.host) renderDossier(item);
+}
+
+window.closeDossier = function() {
+  document.getElementById('asset-dossier').classList.remove('open');
+};
+
+function renderDossier(item) {
+  const d = document.getElementById('asset-dossier');
+  if (!d) return;
+  if (!item) {
+    d.innerHTML = '<div class="dossier-empty">Select an asset to open its dossier.</div>';
+    return;
+  }
+  const starred = isStarred(item.host);
+  const ignored = isIgnored(item.host);
+  const findings = [...(item.findings || [])].sort((a, b) => (SEV_RANK[b.sev] || 0) - (SEV_RANK[a.sev] || 0));
+
+  let h = '';
+  h += `<div class="dossier-hd">`;
+  h += `<div style="display:flex;align-items:center;gap:8px;">`;
+  h += `<div class="dossier-host" style="flex:1;">${esc(item.host)}</div>`;
+  h += `<button class="dossier-close btn btn-sm" onclick="closeDossier()" aria-label="Close dossier">✕</button>`;
+  h += `</div>`;
+  h += `<div class="dossier-sub">`;
+  h += `<span class="triage-priority ${item.priority.toLowerCase()}">${item.priority}</span>`;
+  if (typeof item.score === 'number') h += `<span class="dossier-score">Score ${item.score}</span>`;
+  if (item.status_code) h += sBadge(item.status_code);
+  if (item.title) h += `<span>${esc(item.title)}</span>`;
+  h += `</div></div>`;
+
+  h += `<div class="dossier-bd">`;
+  // Why this asset got its priority — the correlated score breakdown.
+  if (item.reasons && item.reasons.length) {
+    h += `<div class="score-why"><div class="dossier-sec-hd">Why this score</div><ul class="f-reasons">`;
+    item.reasons.forEach(r => h += `<li>${esc(r)}</li>`);
+    h += `</ul></div>`;
+  }
+  if (item.screenshot) {
+    h += `<div class="dossier-shot"><img src="${esc(item.screenshot)}" alt="Screenshot of ${esc(item.host)}" loading="lazy" onclick="openLightbox(${jsq(item.screenshot)}, ${jsq(item.host)})"></div>`;
+  }
+  if (item.tech?.length) {
+    h += `<div><div class="dossier-sec-hd">Technologies</div><div class="triage-badges">`;
+    item.tech.forEach(t => h += `<span class="triage-badge tech">${esc(t)}</span>`);
+    h += `</div></div>`;
+  }
+  if (item.partial) {
+    h += `<div class="loading"><div class="spinner"></div></div>`;
+  } else if (findings.length) {
+    // Group by tier: Confirmed → Suspicious → Observations
+    TIER_ORDER.forEach(tier => {
+      const fs = findings.filter(f => (f.tier || 'observation') === tier);
+      if (!fs.length) return;
+      const label = tier === 'observation' ? 'Observations' : tier.charAt(0).toUpperCase() + tier.slice(1);
+      const groups = groupFindings(fs);
+      h += `<div><div class="dossier-sec-hd">${label} (${groups.length}${groups.length !== fs.length ? ' · ' + fs.length + ' hits' : ''})</div>`;
+      const shown = tier === 'observation' ? groups.slice(0, 15) : groups;
+      shown.forEach(g => {
+        const f = g.head;
+        h += `<div class="dossier-finding">`;
+        h += renderFindingGroup(g);
+        // verdict / severity controls only for actionable tiers (not raw observations);
+        // a grouped row applies the choice to every duplicate it represents.
+        const fps = g.members.map(m => m.fingerprint).filter(Boolean);
+        if (tier !== 'observation' && fps.length) {
+          const fpArg = jsq(fps.join(','));
+          h += `<div class="f-controls">`;
+          h += `<select class="f-ctrl" title="Verdict" onchange="setFindingStateMany(${fpArg},'verdict',this.value)">`;
+          VERDICTS.forEach(v => h += `<option value="${v}" ${f.verdict === v ? 'selected' : ''}>${v.replace('_', ' ')}</option>`);
+          h += `</select>`;
+          h += `<select class="f-ctrl" title="Severity (your call)" onchange="setFindingStateMany(${fpArg},'severity',this.value)">`;
+          SEVERITIES.forEach(s => h += `<option value="${s}" ${(f.severity || '') === s ? 'selected' : ''}>${s || 'unrated'}</option>`);
+          h += `</select>`;
+          h += `</div>`;
+        }
+        h += `</div>`;
+      });
+      if (tier === 'observation' && groups.length > 15) {
+        h += `<span class="finding-more">+${groups.length - 15} more observations</span>`;
+      }
+      h += `</div>`;
+    });
+  } else {
+    h += `<div class="dossier-sec-hd">No detailed findings for this asset</div>`;
+  }
+  h += `</div>`;
+
+  h += `<div class="dossier-acts">`;
+  h += `<a class="btn btn-sm btn-accent" href="${esc(item.url)}" target="_blank" rel="noopener">open ▸</a>`;
+  h += `<button class="btn btn-sm" onclick="copyToClipboard(${jsq(item.url)}, this)">copy url</button>`;
+  h += `<button class="btn btn-sm btn-star ${starred ? 'active' : ''}" onclick="toggleTriageStar(${jsq(item.host)}, this)" aria-label="Star">★</button>`;
+  h += `<button class="btn btn-sm btn-ignore ${ignored ? 'active' : ''}" onclick="toggleTriageIgnore(${jsq(item.host)}, this)">ignore</button>`;
+  h += `</div>`;
+
+  d.innerHTML = h;
 }
 
 
 window.filterTriagePriority = (prio) => {
   triagePriorityFilter = prio;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
   document.querySelectorAll('.triage-bar button').forEach(btn => btn.classList.remove('btn-accent'));
   document.getElementById('btn-triage-' + prio)?.classList.add('btn-accent');
   renderTriageList();
@@ -795,96 +1592,83 @@ window.filterTriagePriority = (prio) => {
 
 window.filterTriageText = (val) => {
   triageTextFilter = val;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
   renderTriageList();
+  // Full-text match against every finding label happens server-side (the
+  // browser only holds a preview per asset). Debounced; re-render on reply.
+  clearTimeout(triageSearchTimer);
+  const q = val.trim().toLowerCase();
+  if (q.length < 2 || !huntQueueItems.some(it => it.partial)) return;
+  triageSearchTimer = setTimeout(async () => {
+    const res = await fetchJSON(`/api/findings/assets?${new URLSearchParams({ target: currentTarget, q })}`);
+    if (triageTextFilter.trim().toLowerCase() !== q) return;   // stale
+    triageSearchHosts = new Set(res?.hosts || []);
+    triageSearchFor = q;
+    renderTriageList();
+  }, 300);
 };
 
 window.toggleHideIgnored = (checked) => {
   triageHideIgnored = checked;
+  triageRenderLimit = TRIAGE_RENDER_STEP;
   renderTriageList();
 };
 
+function cacheTriageLocal(key, on) {
+  try { localStorage.setItem(key, on ? 'true' : 'false'); } catch (e) {}
+}
+
 window.toggleTriageStar = (host, btn) => {
-  const starred = localStorage.getItem(getStarKey(host)) === 'true';
-  localStorage.setItem(getStarKey(host), !starred);
-  btn.classList.toggle('active', !starred);
+  const nowStarred = !triageStarred.has(host);
+  if (nowStarred) triageStarred.add(host); else triageStarred.delete(host);
+  cacheTriageLocal(getStarKey(host), nowStarred);
+  if (btn) btn.classList.toggle('active', nowStarred);
+  persistTriage();
   if (currentView === 'triage') renderTriageList();
 };
 
 window.toggleTriageIgnore = (host, btn) => {
-  const ignored = localStorage.getItem(getIgnoreKey(host)) === 'true';
-  localStorage.setItem(getIgnoreKey(host), !ignored);
-  btn.classList.toggle('active', !ignored);
-  
+  const nowIgnored = !triageIgnored.has(host);
+  if (nowIgnored) triageIgnored.add(host); else triageIgnored.delete(host);
+  cacheTriageLocal(getIgnoreKey(host), nowIgnored);
+  if (btn) btn.classList.toggle('active', nowIgnored);
+
   // Re-calculate triage badge count
-  const activeTriage = huntQueueItems.filter(item => !localStorage.getItem(getIgnoreKey(item.host)));
+  const activeTriage = huntQueueItems.filter(item => !isIgnored(item.host));
   document.getElementById('badge-triage').textContent = activeTriage.length;
 
+  persistTriage();
   if (currentView === 'triage') renderTriageList();
 };
 
 // ── Assets Section ──
 let assetsActiveTab = 'subs';
 let assetsTableCtrl = null;
-let assetsListItems = [];
 
 async function loadAssetsSection() {
-  const container = document.getElementById('data-assets-content');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const [subsRaw, dnsRaw, httpxRaw] = await Promise.all([
-    fetchText(T('subs/all.txt')),
-    fetchText(T('dns/resolved.txt')),
-    fetchText(T('httpx/results.json'))
-  ]);
-
-  // Build IP lookup from httpx JSON (has -ip flag data)
-  const ipMap = {};
-  httpxRaw.split('\n').filter(Boolean).forEach(line => {
-    try {
-      const r = JSON.parse(line);
-      const host = r.input || (r.url ? new URL(r.url).hostname : '');
-      const ip = r.a ? (Array.isArray(r.a) ? r.a[0] : r.a) : (r.host || '');
-      if (host && ip) ipMap[host] = ip;
-    } catch(e) {}
-  });
-
-  assetsListItems = {
-    subs: parseLines(subsRaw).map(line => ({ value: line })),
-    dns: parseLines(dnsRaw).map(host => ({
-      host: host,
-      ip: ipMap[host] || ''
-    }))
-  };
-
-  document.getElementById('tc-assets-subs').textContent = assetsListItems.subs.length;
-  document.getElementById('tc-assets-dns').textContent = assetsListItems.dns.length;
-
+  fillTabCounts({ 'tc-assets-subs': 'subs/all.txt', 'tc-assets-dns': 'dns/resolved.txt' });
   renderAssetsTab();
 }
 
 function renderAssetsTab() {
   const containerId = 'data-assets-content';
-  const q = document.getElementById('filter-assets-search').value;
+  document.getElementById(containerId).innerHTML = '';
 
   if (assetsActiveTab === 'subs') {
-    assetsTableCtrl = makePagedTable(
-      containerId,
-      assetsListItems.subs,
-      [{ key: 'value', label: 'Subdomain' }],
-      (item, idx) => `<tr><td class="wrap-cell">${hilite(item.value, _assetsSearchVal())}</td></tr>`,
-      (item, filterText) => item.value.toLowerCase().includes(filterText)
-    );
+    assetsTableCtrl = renderServerList(containerId, 'subs/all.txt', 'Subdomain', _assetsSearchVal);
   } else {
-    assetsTableCtrl = makePagedTable(
+    // Resolved hosts joined with their httpx IP — server-side, one page at a time.
+    const q = _assetsSearchVal().toLowerCase();
+    const ctrl = makeServerTable(
       containerId,
-      assetsListItems.dns,
+      (p) => `/api/data/table?${new URLSearchParams({ target: currentTarget, kind: 'dns', ...p })}`,
       [{ key: 'host', label: 'Subdomain' }, { key: 'ip', label: 'IP Address' }],
-      (item, idx) => `<tr><td>${hilite(item.host, _assetsSearchVal())}</td><td>${hilite(item.ip, _assetsSearchVal())}</td></tr>`,
-      (item, filterText) => (item.host + ' ' + item.ip).toLowerCase().includes(filterText)
+      (item, _i, a) => `<tr><td>${hilite(item.host, a.q || '')}</td><td>${hilite(item.ip, a.q || '')}</td></tr>`,
+      { args: { q } }
     );
+    ctrl.render();
+    assetsTableCtrl = { filter: (text) => ctrl.filter({ q: text }) };
   }
-  assetsTableCtrl.render();
-  if (q) assetsTableCtrl.filter(q.toLowerCase());
 }
 
 function _assetsSearchVal() {
@@ -896,42 +1680,24 @@ window.assetsFilter = (val) => {
 };
 
 // ── Web Apps Section ──
+// httpx results are filtered (text / status / duplicate titles), sorted and
+// paged on the server; the browser only ever holds one page.
 let webappsTableCtrl = null;
-let webappsListItems = [];
+
+function _webappsArgs() {
+  return { q: webappsTextQuery.toLowerCase(), status: webappsStatusQuery, hideDupes: webappsHideDupes };
+}
 
 async function loadWebApps() {
-  const container = document.getElementById('data-webapps-content');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const text = await fetchText(T('httpx/results.json'));
-  webappsListItems = text.split('\n').filter(Boolean).map(line => {
-    try {
-      return JSON.parse(line);
-    } catch(e) {
-      return null;
-    }
-  }).filter(Boolean);
-
   renderWebAppsTable();
 }
 
 function renderWebAppsTable() {
   const containerId = 'data-webapps-content';
-  
-  // Filter CDN, duplicates, status codes
-  const uniqueTitles = new Set();
-  const filtered = webappsListItems.filter(item => {
-    // Duplicate title check
-    if (webappsHideDupes && item.title) {
-      if (uniqueTitles.has(item.title.toLowerCase())) return false;
-      uniqueTitles.add(item.title.toLowerCase());
-    }
-    return true;
-  });
-
-  webappsTableCtrl = makePagedTable(
+  document.getElementById(containerId).innerHTML = '';
+  webappsTableCtrl = makeServerTable(
     containerId,
-    filtered,
+    (p) => `/api/data/table?${new URLSearchParams({ target: currentTarget, kind: 'webapps', ...p })}`,
     [
       { key: 'url', label: 'Web URL' },
       { key: 'status_code', label: 'Status' },
@@ -939,56 +1705,70 @@ function renderWebAppsTable() {
       { key: 'webserver', label: 'Web Server' },
       { key: 'tech', label: 'Technologies' }
     ],
-    (item, idx) => {
+    (item) => {
       const tech = (item.tech || []).join(', ');
       return `<tr>
-        <td class="wrap-cell"><a href="${esc(item.url)}" target="_blank" class="triage-host">${hilite(item.url, webappsTextQuery)}</a></td>
+        <td class="wrap-cell"><a href="${esc(item.url)}" target="_blank" rel="noopener" class="triage-host">${hilite(item.url, webappsTextQuery)}</a></td>
         <td>${sBadge(item.status_code)}</td>
         <td class="wrap-cell">${hilite(item.title || '', webappsTextQuery)}</td>
         <td>${hilite(item.webserver || '', webappsTextQuery)}</td>
         <td class="wrap-cell" style="color:var(--blue); font-size:11px;">${hilite(tech, webappsTextQuery)}</td>
       </tr>`;
     },
-    (item, filterArgs) => {
-      const { text, status } = filterArgs;
-      if (status && !String(item.status_code).startsWith(status)) return false;
-      if (!text) return true;
-      const techStr = (item.tech || []).join(' ');
-      return [item.url, item.title, item.webserver, techStr].join(' ').toLowerCase().includes(text);
-    }
+    { args: _webappsArgs() }
   );
-
   webappsTableCtrl.render();
-  webappsTableCtrl.filter({ text: webappsTextQuery.toLowerCase(), status: webappsStatusQuery });
 }
 
 window.webappsFilter = (val) => {
   webappsTextQuery = val;
-  webappsTableCtrl?.filter({ text: val.toLowerCase(), status: webappsStatusQuery });
+  webappsTableCtrl?.filter(_webappsArgs());
 };
 
 window.webappsStatusFilter = (val) => {
   webappsStatusQuery = val;
-  webappsTableCtrl?.filter({ text: webappsTextQuery.toLowerCase(), status: val });
+  webappsTableCtrl?.filter(_webappsArgs());
 };
 
 window.toggleWebappsHideDuplicates = (checked) => {
   webappsHideDupes = checked;
-  renderWebAppsTable();
+  webappsTableCtrl?.filter(_webappsArgs());
 };
 
 // ── Screenshots ──
+// Paged gallery (48 per page, server-side): rendering thousands of cards and
+// images at once exhausted memory on phones.
+let ssPage = 0;
+let ssQuery = '';
+let ssSeq = 0;
+let ssFilterTimer = null;
+const SS_PAGE_SIZE = 48;
+
 async function loadScreenshots() {
+  ssPage = 0;
+  await renderScreenshotsPage();
+}
+
+async function renderScreenshotsPage() {
   const container = document.getElementById('data-screenshots');
+  const pager = document.getElementById('ss-pager');
   container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const data = await fetchJSON(`/api/screenshots?target=${currentTarget}`);
-  const files = data?.files || [];
-
-  document.getElementById('badge-screenshots').textContent = files.length;
+  const mySeq = ++ssSeq;
+  const data = await fetchJSON(`/api/screenshots?${new URLSearchParams({ target: currentTarget, page: ssPage, pageSize: SS_PAGE_SIZE, q: ssQuery })}`);
+  if (mySeq !== ssSeq) return;
+  if (!data) {
+    container.innerHTML = '<div class="empty">Error fetching screenshots.</div>';
+    if (pager) pager.innerHTML = '';
+    toast('Failed to load screenshots.', 'err');
+    return;
+  }
+  const files = data.files || [];
+  const total = data.total || 0;
+  if (!ssQuery) document.getElementById('badge-screenshots').textContent = total.toLocaleString();
 
   if (files.length === 0) {
-    container.innerHTML = '<div class="empty">No screenshots collected.</div>';
+    container.innerHTML = `<div class="empty">${ssQuery ? 'No screenshots match this filter.' : 'No screenshots collected.'}</div>`;
+    if (pager) pager.innerHTML = '';
     return;
   }
 
@@ -996,13 +1776,39 @@ async function loadScreenshots() {
   files.forEach(f => {
     const src = `/screenshots/${currentTarget}/${encodeURIComponent(f)}`;
     const label = f.replace(/\.(png|jpg|jpeg)$/i, '');
-    h += `<div class="ss-card" onclick="openLightbox('${src}', '${esc(label)}')">`;
-    h += `<img src="${src}" alt="${esc(label)}" loading="lazy" />`;
+    h += `<div class="ss-card" onclick="openLightbox(${jsq(src)}, ${jsq(label)})">`;
+    h += `<img src="${esc(src)}" alt="${esc(label)}" loading="lazy" decoding="async" width="220" height="140" />`;
     h += `<div class="ss-footer"><span>${esc(label)}</span></div>`;
     h += `</div>`;
   });
   container.innerHTML = h;
+
+  const pages = Math.ceil(total / SS_PAGE_SIZE) || 1;
+  const start = ssPage * SS_PAGE_SIZE;
+  if (pager) {
+    let p = `<span>Showing ${start + 1}–${Math.min(start + SS_PAGE_SIZE, total)} of ${total.toLocaleString()}</span>`;
+    if (pages > 1) {
+      p += `<div style="display:flex;gap:4px;">`;
+      p += `<button class="btn btn-sm" onclick="ssGoPage(-1)" ${ssPage === 0 ? 'disabled' : ''}>Prev</button>`;
+      p += `<button class="btn btn-sm" onclick="ssGoPage(1)" ${ssPage >= pages - 1 ? 'disabled' : ''}>Next</button>`;
+      p += `</div>`;
+    }
+    pager.innerHTML = p;
+  }
 }
+
+window.ssGoPage = (delta) => {
+  ssPage = Math.max(0, ssPage + delta);
+  renderScreenshotsPage();
+  document.getElementById('view-screenshots')?.scrollIntoView({ block: 'start' });
+};
+
+window.screenshotsFilter = (val) => {
+  ssQuery = val.trim().toLowerCase();
+  ssPage = 0;
+  clearTimeout(ssFilterTimer);
+  ssFilterTimer = setTimeout(renderScreenshotsPage, 250);
+};
 
 // ── Historical Section Tabs ──
 async function loadHistoricalSection() {
@@ -1030,6 +1836,7 @@ async function fetchAndRenderHistorical() {
   const res = await fetchJSON(`/api/data/historical?${qs.toString()}`);
   if (!res) {
     container.innerHTML = '<div class="empty">Error fetching data.</div>';
+    toast('Failed to load historical URLs.', 'err');
     return;
   }
 
@@ -1094,7 +1901,7 @@ async function fetchAndRenderHistorical() {
           <td style="color:var(--muted);">${rowNum}</td>
           <td class="wrap-cell"><a href="${esc(url)}" target="_blank" class="triage-host">${hilite(url, histTextQuery)}</a></td>
           <td style="text-align:right;">
-            <button class="btn btn-sm" onclick="copyToClipboard('${esc(url)}', this)">copy</button>
+            <button class="btn btn-sm" onclick="copyToClipboard(${jsq(url)}, this)">copy</button>
           </td>
         </tr>`;
       });
@@ -1170,60 +1977,22 @@ window.toggleHistHideDupes = (checked) => {
 // ── JS Section ──
 let jsActiveTab = 'scripts';
 let jsTableCtrl = null;
-let jsListItems = {};
+const JS_TAB_FILES = {
+  scripts: 'js/scripts_alive.txt', endpoints: 'js/endpoints.txt', secrets: 'js/secrets.txt',
+  leakage: 'js/leakage.txt', comments: 'js/comments.txt', maps: 'js/maps_files.txt',
+  api: 'js/api_endpoints.txt', buckets: 'js/buckets.txt', ws: 'js/websockets.txt'
+};
 
 async function loadJSSection() {
-  const container = document.getElementById('data-js-content');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const [scriptsRaw, endpointsRaw, secretsRaw, leakageRaw, commentsRaw, mapsRaw, apiRaw, bucketsRaw, wsRaw] = await Promise.all([
-    fetchText(T('js/scripts_alive.txt')),
-    fetchText(T('js/endpoints.txt')),
-    fetchText(T('js/secrets.txt')),
-    fetchText(T('js/leakage.txt')),
-    fetchText(T('js/comments.txt')),
-    fetchText(T('js/maps_files.txt')),
-    fetchText(T('js/api_endpoints.txt')),
-    fetchText(T('js/buckets.txt')),
-    fetchText(T('js/websockets.txt'))
-  ]);
-
-  jsListItems = {
-    scripts: parseLines(scriptsRaw).map(line => ({ value: line })),
-    endpoints: parseLines(endpointsRaw).map(line => ({ value: line })),
-    secrets: parseLines(secretsRaw).map(line => ({ value: line })),
-    leakage: parseLines(leakageRaw).map(line => ({ value: line })),
-    comments: parseLines(commentsRaw).map(line => ({ value: line })),
-    maps: parseLines(mapsRaw).map(line => ({ value: line })),
-    api: parseLines(apiRaw).map(line => ({ value: line })),
-    buckets: parseLines(bucketsRaw).map(line => ({ value: line })),
-    ws: parseLines(wsRaw).map(line => ({ value: line }))
-  };
-
-  // Populate tab badges
-  for (const k of Object.keys(jsListItems)) {
-    const el = document.getElementById(`tc-js-${k}`);
-    if (el) el.textContent = jsListItems[k].length;
-  }
-
+  const map = {};
+  for (const [k, f] of Object.entries(JS_TAB_FILES)) map[`tc-js-${k}`] = f;
+  fillTabCounts(map);
   renderJSTab();
 }
 
 function renderJSTab() {
-  const containerId = 'data-js-content';
-  const dataset = jsListItems[jsActiveTab];
-  const q = document.getElementById('filter-js-search').value;
-
-  jsTableCtrl = makePagedTable(
-    containerId,
-    dataset,
-    [{ key: 'value', label: 'Item details' }],
-    (item, idx) => `<tr><td class="wrap-cell">${hilite(item.value, _jsSearchVal())}</td></tr>`,
-    (item, filterText) => item.value.toLowerCase().includes(filterText)
-  );
-
-  jsTableCtrl.render();
-  if (q) jsTableCtrl.filter(q.toLowerCase());
+  document.getElementById('data-js-content').innerHTML = '';
+  jsTableCtrl = renderServerList('data-js-content', JS_TAB_FILES[jsActiveTab], 'Item details', _jsSearchVal);
 }
 
 function _jsSearchVal() {
@@ -1237,65 +2006,106 @@ window.jsFilter = (val) => {
 // ── Ports Section ──
 let portsActiveTab = 'naabu';
 let portsTableCtrl = null;
-let portsListItems = {};
+let portsRawSeq = 0;
+const RAW_PANEL_MAX = 512 * 1024;   // bytes of a raw dump rendered in-page
 
 async function loadPortsSection() {
-  const container = document.getElementById('data-ports-content');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const [naabuRaw, targetsRaw, nmapRaw, gnmapRaw] = await Promise.all([
-    fetchText(T('ports/naabu.txt')),
-    fetchText(T('ports/nmap_targets.txt')),
-    fetchText(T('ports/nmap_results.nmap')),
-    fetchText(T('ports/nmap_results.gnmap'))
-  ]);
-
-  portsListItems = {
-    naabu: parseLines(naabuRaw).map(line => {
-      const parts = line.split(':');
-      return { host: parts[0] || '', port: parts[1] || '' };
-    }),
-    targets: parseLines(targetsRaw).map(line => ({ value: line })),
-    nmap: nmapRaw,
-    gnmap: gnmapRaw
-  };
-
-  document.getElementById('tc-ports-naabu').textContent = portsListItems.naabu.length;
-  document.getElementById('tc-ports-targets').textContent = portsListItems.targets.length;
-  document.getElementById('tc-ports-nmap').textContent = portsListItems.nmap ? '1' : '0';
-  document.getElementById('tc-ports-gnmap').textContent = portsListItems.gnmap ? '1' : '0';
-
+  const counts = await fillTabCounts({ 'tc-ports-naabu': 'ports/naabu.txt', 'tc-ports-targets': 'ports/nmap_targets.txt' });
+  // nmap dumps: just "present or not" for the badge (no download needed).
+  const raw = await fetchJSON(`/api/data/counts?${new URLSearchParams({ target: currentTarget, files: 'ports/nmap_results.nmap,ports/nmap_results.gnmap' })}`);
+  const rc = raw?.counts || {};
+  document.getElementById('tc-ports-nmap').textContent = rc['ports/nmap_results.nmap'] ? '1' : '0';
+  document.getElementById('tc-ports-gnmap').textContent = rc['ports/nmap_results.gnmap'] ? '1' : '0';
   renderPortsTab();
 }
 
-function renderPortsTab() {
+// Fetch at most `max` bytes of a target file; returns {text, truncated, total}.
+async function fetchTextHead(rel, max = RAW_PANEL_MAX, mode = 'max') {
+  try {
+    const r = await fetch(API + T(rel) + `?${mode}=${max}`);
+    if (!r.ok) return { text: '', truncated: false, total: 0 };
+    return {
+      text: await r.text(),
+      truncated: r.headers.get('X-Truncated') === '1',
+      total: parseInt(r.headers.get('X-Total-Size') || '0', 10)
+    };
+  } catch { return { text: '', truncated: false, total: 0 }; }
+}
+
+function truncNote(rel, res, where = 'first') {
+  if (!res.truncated) return '';
+  const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
+  return `<div class="empty" style="padding:8px;text-align:left;">Showing the ${where} ${mb(RAW_PANEL_MAX)} of ${mb(res.total)}. ` +
+    `<a href="${esc(T(rel))}" target="_blank" rel="noopener">Open full file</a></div>`;
+}
+
+// Triage Report: render reports/triage_report.md (written by the triage-results skill).
+// Shown as readable preformatted text — no markdown lib (keeps the zero-dependency goal).
+async function loadTriageReport() {
+  const el = document.getElementById('triage-report-body');
+  if (!el || !currentTarget) return;
+  el.textContent = 'Loading…';
+  // Reveal the Run Triage button only when the server has agent runs enabled.
+  const status = await fetchJSON('/api/scans/active');
+  const btn = document.getElementById('run-triage-btn');
+  if (btn) btn.hidden = !(status && status.agent_runs_enabled);
+  const rel = 'reports/triage_report.md';
+  const res = await fetchTextHead(rel);
+  if (!res.text) {
+    el.innerHTML = '<div class="empty" style="padding:12px;text-align:left;">' +
+      'No triage report yet. Run the <strong>triage-results</strong> skill against this ' +
+      'target to generate <code>reports/triage_report.md</code>.</div>';
+    return;
+  }
+  el.innerHTML = truncNote(rel, res) + esc(res.text);
+}
+window.loadTriageReport = loadTriageReport;
+
+// Launch the triage-results skill as a tracked agent run for the current target.
+window.runTriage = async function() {
+  if (!currentTarget) return;
+  const btn = document.getElementById('run-triage-btn');
+  if (btn) btn.disabled = true;
+  const res = await postJSON('/api/triage/start', { target: currentTarget });
+  if (btn) btn.disabled = false;
+  if (res && res.ok) {
+    toast('Triage started — watch the run tracker; refresh when it completes.', 'info', 6000);
+    startScanTrackerPoll();
+  } else {
+    toast((res && res.message) || 'Could not start triage.', 'err');
+  }
+};
+
+async function renderPortsTab() {
   const containerId = 'data-ports-content';
+  const container = document.getElementById(containerId);
   const q = document.getElementById('filter-ports-search').value;
+  container.innerHTML = '';
+  portsRawSeq++;
 
   if (portsActiveTab === 'naabu') {
-    portsTableCtrl = makePagedTable(
+    const ctrl = makeServerTable(
       containerId,
-      portsListItems.naabu,
+      (p) => `/api/data/table?${new URLSearchParams({ target: currentTarget, kind: 'ports', ...p })}`,
       [{ key: 'host', label: 'Host' }, { key: 'port', label: 'Port' }],
-      (item, idx) => `<tr><td>${hilite(item.host, q)}</td><td style="color:var(--accent); font-weight:600;">${hilite(item.port, q)}</td></tr>`,
-      (item, filterText) => (item.host + ' ' + item.port).toLowerCase().includes(filterText)
+      (item, _i, a) => `<tr><td>${hilite(item.host, a.q || '')}</td><td style="color:var(--accent); font-weight:600;">${hilite(item.port, a.q || '')}</td></tr>`,
+      { args: { q: q.toLowerCase() } }
     );
-    portsTableCtrl.render();
-    if (q) portsTableCtrl.filter(q.toLowerCase());
+    ctrl.render();
+    portsTableCtrl = { filter: (text) => ctrl.filter({ q: text }) };
   } else if (portsActiveTab === 'targets') {
-    portsTableCtrl = makePagedTable(
-      containerId,
-      portsListItems.targets,
-      [{ key: 'value', label: 'Targets block' }],
-      (item, idx) => `<tr><td>${hilite(item.value, q)}</td></tr>`,
-      (item, filterText) => item.value.toLowerCase().includes(filterText)
-    );
-    portsTableCtrl.render();
-    if (q) portsTableCtrl.filter(q.toLowerCase());
+    portsTableCtrl = renderServerList(containerId, 'ports/nmap_targets.txt', 'Targets block',
+      () => document.getElementById('filter-ports-search').value);
   } else {
-    // Render raw nmap / greppable dumps
-    const rawData = portsListItems[portsActiveTab];
-    document.getElementById(containerId).innerHTML = `<div class="raw-view-panel">${esc(rawData || 'No raw output data.')}</div>`;
+    // Raw nmap / greppable dumps (head only — these can be large)
+    portsTableCtrl = null;
+    const rel = portsActiveTab === 'nmap' ? 'ports/nmap_results.nmap' : 'ports/nmap_results.gnmap';
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    const mySeq = ++portsRawSeq;
+    const res = await fetchTextHead(rel);
+    if (mySeq === portsRawSeq && (portsActiveTab === 'nmap' || portsActiveTab === 'gnmap')) {
+      container.innerHTML = truncNote(rel, res) + `<div class="raw-view-panel">${esc(res.text || 'No raw output data.')}</div>`;
+    }
   }
 }
 
@@ -1306,50 +2116,28 @@ window.portsFilter = (val) => {
 // ── Dorks Section ──
 let dorksActiveTab = 'all';
 let dorksTableCtrl = null;
-let dorksListItems = {};
+const DORK_TAB_FILES = {
+  all: 'dorks/all_findings.txt', config: 'dorks/passive_config_files.txt',
+  backups: 'dorks/passive_backup_files.txt', logs: 'dorks/passive_log_files.txt',
+  admin: 'dorks/passive_admin_panels.txt', cloud: 'dorks/passive_cloud_assets.txt',
+  auth: 'dorks/passive_auth_tokens.txt', active: 'dorks/active_hits.txt',
+  confirmed: 'dorks/active_confirmed.txt'
+};
 
 async function loadDorksSection() {
-  const container = document.getElementById('data-dorks-content');
-  container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
-
-  const tabsKeys = ['all', 'config', 'backups', 'logs', 'admin', 'cloud', 'auth', 'active', 'confirmed'];
-  const fetches = tabsKeys.map(k => {
-    let filename = 'all_findings.txt';
-    if (k === 'config') filename = 'passive_config_files.txt';
-    else if (k === 'backups') filename = 'passive_backup_files.txt';
-    else if (k === 'logs') filename = 'passive_log_files.txt';
-    else if (k === 'admin') filename = 'passive_admin_panels.txt';
-    else if (k === 'cloud') filename = 'passive_cloud_assets.txt';
-    else if (k === 'auth') filename = 'passive_auth_tokens.txt';
-    else if (k === 'active') filename = 'active_hits.txt';
-    else if (k === 'confirmed') filename = 'active_confirmed.txt';
-    return fetchText(T(`dorks/${filename}`));
-  });
-
-  const responses = await Promise.all(fetches);
-  tabsKeys.forEach((k, idx) => {
-    dorksListItems[k] = parseLines(responses[idx]).map(line => ({ value: line }));
-    document.getElementById(`tc-dorks-${k}`).textContent = dorksListItems[k].length;
-  });
-
+  const map = {};
+  for (const [k, f] of Object.entries(DORK_TAB_FILES)) map[`tc-dorks-${k}`] = f;
+  fillTabCounts(map);
   renderDorksTab();
 }
 
+function _dorksSearchVal() {
+  return document.getElementById('filter-dorks-search').value;
+}
+
 function renderDorksTab() {
-  const containerId = 'data-dorks-content';
-  const dataset = dorksListItems[dorksActiveTab];
-  const q = document.getElementById('filter-dorks-search').value;
-
-  dorksTableCtrl = makePagedTable(
-    containerId,
-    dataset,
-    [{ key: 'value', label: 'Dork findings & context' }],
-    (item, idx) => `<tr><td class="wrap-cell">${hilite(item.value, q)}</td></tr>`,
-    (item, filterText) => item.value.toLowerCase().includes(filterText)
-  );
-
-  dorksTableCtrl.render();
-  if (q) dorksTableCtrl.filter(q.toLowerCase());
+  document.getElementById('data-dorks-content').innerHTML = '';
+  dorksTableCtrl = renderServerList('data-dorks-content', DORK_TAB_FILES[dorksActiveTab], 'Dork findings & context', _dorksSearchVal);
 }
 
 window.dorksFilter = (val) => {
@@ -1371,7 +2159,7 @@ async function loadRawFilesSection() {
 
   let h = '';
   rawFilesList.forEach(file => {
-    h += `<div class="raw-file-item" onclick="viewRawFile('${esc(file)}', this)">${esc(file)}</div>`;
+    h += `<div class="raw-file-item" onclick="viewRawFile(${jsq(file)}, this)">${esc(file)}</div>`;
   });
   indexContainer.innerHTML = h;
 
@@ -1387,8 +2175,9 @@ window.viewRawFile = async function(file, el) {
   const viewer = document.getElementById('raw-file-viewer');
   viewer.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
-  const raw = await fetchText(T(file));
-  viewer.innerHTML = `<div class="raw-view-panel" style="max-height: 600px;">${esc(raw)}</div>`;
+  // Head only: multi-MB raw files would freeze (or crash) a phone.
+  const res = await fetchTextHead(file);
+  viewer.innerHTML = truncNote(file, res) + `<div class="raw-view-panel" style="max-height: 600px;">${esc(res.text)}</div>`;
 };
 
 // ── Monitor Scan ──
@@ -1513,21 +2302,38 @@ window.startScan = async function() {
   }
   const skip = MODULES.filter(m => !enabledModules.has(m.id)).map(m => m.id);
   const threads = document.getElementById('scan-threads').value || undefined;
-  const rate = document.getElementById('scan-rate').value || undefined;
   const top_ports = document.getElementById('scan-ports').value || undefined;
+  // Two user selections: "overall" paces both HTTP probing and port scanning;
+  // "firewall-prone" paces the noisy stages and is kept ≤ overall.
+  const overall = document.getElementById('scan-overall-rate')?.value || undefined;
+  let active_rate = document.getElementById('scan-active-rate')?.value || undefined;
+  const headers = (document.getElementById('scan-headers')?.value || '')
+    .split('\n').map(s => s.trim()).filter(Boolean);
 
-  const res = await postJSON('/api/scan/start', { domain, skip, threads, rate, top_ports });
+  if (overall && active_rate && Number(active_rate) > Number(overall)) {
+    active_rate = overall;
+    toast('Firewall-prone rate clamped to overall rate', 'info', 2500);
+  }
+
+  // The one "overall" dial maps to both the HTTP rate and the port-scan rate.
+  const res = await postJSON('/api/scan/start',
+    { domain, skip, threads, rate: overall, top_ports,
+      http_rate: overall, active_rate, headers });
   if (res?.ok) {
-    document.getElementById('start-scan-btn').disabled = true;
-    document.getElementById('scan-log').classList.add('vis');
-    pollScanLog();
+    toast(`Scan started for ${domain}`, 'ok');
+    // Multi-target: don't lock the UI — surface progress in the Explorer
+    // tracker and let the user queue more targets (backend enforces the cap).
+    closeScanModal();
+    loadScanTracker();
+    startScanTrackerPoll();
+    openScanDetail(domain);
   } else {
-    alert(res?.message || 'Failed to start scan');
+    toast(res?.message || 'Failed to start scan', 'err');
   }
 };
 
-window.stopScan = async function() {
-  await postJSON('/api/scan/stop', {});
+window.stopScan = async function(target) {
+  await postJSON('/api/scan/stop', target ? { target } : {});
 };
 
 // Active scan logger check with smart auto-scroll
@@ -1540,6 +2346,7 @@ function isNearBottom(el) {
 function pollScanLog() {
   if (scanPollTimer) clearInterval(scanPollTimer);
   scanPollTimer = setInterval(async () => {
+    if (document.hidden) return;                 // no polling while backgrounded
     const s = await fetchJSON('/api/scan/status');
     if (!s) return;
     const logEl = document.getElementById('scan-log');
@@ -1582,7 +2389,8 @@ function updateScanBar(s) {
     bar.classList.add('vis');
     const elapsed = s.elapsed ? `${Math.floor(s.elapsed/60)}m ${s.elapsed%60}s` : '';
     const stepText = s.current_step ? ` [Step: ${s.current_step}]` : '';
-    document.getElementById('scan-bar-text').textContent = `Active scan running for ${s.domain || ''}... ${elapsed}${stepText}`;
+    const label = s.kind === 'monitor' ? 'Monitor check' : 'Active scan';
+    document.getElementById('scan-bar-text').textContent = `${label} running for ${s.domain || ''}... ${elapsed}${stepText}`;
     
     const progressEl = document.getElementById('scan-progress-bar');
     if (progressEl) {
@@ -1642,8 +2450,10 @@ window.selectLogFile = async function(filename) {
   consoleEl.textContent = 'Loading log file...';
   consoleEl.classList.remove('active-stream');
   
-  const text = await fetchText(`/api/file/${currentTarget}/logs/${filename}`);
-  consoleEl.textContent = text || 'Empty log file.';
+  // Tail only: the end of a long scan log is what matters, and the full file
+  // can be many MB.
+  const res = await fetchTextHead(`logs/${filename}`, RAW_PANEL_MAX, 'tail');
+  consoleEl.textContent = (res.truncated ? `… (showing the last ${(RAW_PANEL_MAX / 1048576).toFixed(1)} MB of ${(res.total / 1048576).toFixed(1)} MB)\n` : '') + (res.text || 'Empty log file.');
   consoleEl.scrollTop = consoleEl.scrollHeight;
 };
 
@@ -1655,7 +2465,12 @@ window.closeMonitorModal = () => {
   document.getElementById('monitor-modal').classList.remove('open');
 };
 window.toggleMonitor = async (target, enabled) => {
-  await postJSON('/api/monitor/toggle', { target, enabled });
+  const res = await postJSON('/api/monitor/toggle', { target, enabled });
+  if (res?.ok) {
+    toast(`Monitoring ${enabled ? 'enabled' : 'disabled'} for ${target}`, 'ok');
+  } else {
+    toast('Failed to update monitoring.', 'err');
+  }
 };
 window.submitMonitorModal = async () => {
   const domain = document.getElementById('monitor-domain').value.trim();
@@ -1670,9 +2485,10 @@ window.submitMonitorModal = async () => {
   if (res?.ok) {
     openScanModal();
     document.getElementById('scan-log').classList.add('vis');
+    toast(`Monitor check started for ${domain}`, 'ok');
     pollScanLog();
   } else {
-    alert(res?.message || 'Failed to start monitor check.');
+    toast(res?.message || 'Failed to start monitor check.', 'err');
   }
 };
 
@@ -1688,9 +2504,10 @@ window.runMonitorScan = async () => {
   if (res?.ok) {
     openScanModal();
     document.getElementById('scan-log').classList.add('vis');
+    toast(`Monitor check started for ${domain}`, 'ok');
     pollScanLog();
   } else {
-    alert(res?.message || 'Failed to start monitor check.');
+    toast(res?.message || 'Failed to start monitor check.', 'err');
   }
 };
 
@@ -1858,6 +2675,173 @@ window.startScan = async function() {
   await saveScopeRules();
   _origStartScan();
 };
+
+// ════════════════════════════════════════════════════════════════
+// Keyboard model + command bar (Phase 2) — makes it a workstation
+// ════════════════════════════════════════════════════════════════
+
+function _typing() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const t = el.tagName;
+  return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || el.isContentEditable;
+}
+function _cmdOpen() { return document.getElementById('cmdbar-overlay')?.classList.contains('open'); }
+function _helpOpen() { return document.getElementById('help-modal')?.classList.contains('open'); }
+
+function openHelp() { document.getElementById('help-modal').classList.add('open'); }
+function closeHelp() { document.getElementById('help-modal').classList.remove('open'); }
+window.closeHelp = closeHelp;
+
+const GO_MAP = { o: 'overview', q: 'triage', a: 'assets', w: 'webapps', s: 'screenshots', h: 'historical', j: 'js', p: 'ports', d: 'dorks', m: 'monitor', f: 'diff', l: 'logs', r: 'rawfiles' };
+let _pendingG = false;
+
+function moveTriageCursor(delta) {
+  if (!triageVisible.length) return;
+  let i = triageCursor;
+  i = (i < 0) ? 0 : Math.max(0, Math.min(triageVisible.length - 1, i + delta));
+  triageCursor = i;
+  const item = triageVisible[i];
+  if (!item) return;
+  if (i >= triageRenderLimit) {
+    triageRenderLimit = i + TRIAGE_RENDER_STEP;
+    renderTriageList();
+  }
+  selectAsset(item.host);
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(item.host) : item.host.replace(/"/g, '\\"');
+  const row = document.querySelector(`#triage-list-container .triage-row[data-host="${sel}"]`);
+  if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+document.addEventListener('keydown', (e) => {
+  if (_cmdOpen()) { if (e.key === 'Escape') { closeCmd(); e.preventDefault(); } return; }
+  if (_helpOpen()) { if (e.key === 'Escape') { closeHelp(); e.preventDefault(); } return; }
+
+  // Cmd/Ctrl+K opens the command bar from anywhere (even while typing)
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); openCmd(); return; }
+
+  if (_typing()) return;                       // never hijack text fields
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  if (_pendingG) {
+    _pendingG = false;
+    const v = GO_MAP[e.key.toLowerCase()];
+    if (v && currentTarget) { e.preventDefault(); switchView(v); }
+    return;
+  }
+
+  if (e.key === '/') { e.preventDefault(); openCmd(); return; }
+  if (e.key === '?') { e.preventDefault(); openHelp(); return; }
+  if (e.key === 'g') { _pendingG = true; return; }
+  if (e.key === 'Escape') { closeDossier(); return; }
+
+  if (currentView === 'triage' && currentTarget) {
+    const k = e.key.toLowerCase();
+    const it = triageVisible[triageCursor];
+    if (k === 'j') { e.preventDefault(); moveTriageCursor(1); }
+    else if (k === 'k') { e.preventDefault(); moveTriageCursor(-1); }
+    else if (k === 'o' || e.key === 'Enter') { if (it) { e.preventDefault(); window.open(it.url, '_blank', 'noopener'); } }
+    else if (k === 's') { if (it) { e.preventDefault(); toggleTriageStar(it.host, null); } }
+    else if (k === 'x') { if (it) { e.preventDefault(); toggleTriageIgnore(it.host, null); } }
+  }
+});
+
+// ── Command bar: quick-nav + global search across the current target ──
+let cmdResults = [];
+let cmdCursor = 0;
+
+const CMD_VIEWS = [
+  { id: 'overview', label: 'Overview' }, { id: 'triage', label: 'Hunt Queue' },
+  { id: 'triagereport', label: 'Triage Report' },
+  { id: 'assets', label: 'Assets' }, { id: 'webapps', label: 'Web Apps' },
+  { id: 'screenshots', label: 'Screenshots' }, { id: 'historical', label: 'Historical' },
+  { id: 'js', label: 'JS' }, { id: 'ports', label: 'Ports' }, { id: 'dorks', label: 'Dorks' },
+  { id: 'diff', label: 'Diff Matrix' }, { id: 'monitor', label: 'Monitor' },
+  { id: 'logs', label: 'Logs' }, { id: 'rawfiles', label: 'Raw Files' },
+];
+
+function openCmd() {
+  const o = document.getElementById('cmdbar-overlay');
+  o.classList.add('open');
+  const i = document.getElementById('cmdbar-input');
+  i.value = '';
+  i.focus();
+  buildCmd('');
+}
+function closeCmd() { document.getElementById('cmdbar-overlay').classList.remove('open'); }
+window.openCmd = openCmd;
+window.closeCmd = closeCmd;
+window._cmdInput = (v) => buildCmd(v);
+
+function buildCmd(q) {
+  q = (q || '').trim().toLowerCase();
+  const res = [];
+
+  if (!q || 'start new scan'.includes(q) || 'scan'.includes(q)) {
+    res.push({ kind: 'action', label: 'Start new scan', run: () => { closeCmd(); openScanModal(); } });
+  }
+  if (!q || 'run monitor check'.includes(q) || 'monitor'.includes(q)) {
+    res.push({ kind: 'action', label: 'Run monitor check', run: () => { closeCmd(); runMonitorScan(); } });
+  }
+  if (currentTarget) {
+    CMD_VIEWS.forEach(v => {
+      if (!q || v.label.toLowerCase().includes(q) || v.id.includes(q)) {
+        res.push({ kind: 'go', label: v.label, run: () => { closeCmd(); switchView(v.id); } });
+      }
+    });
+    if (q) {
+      huntQueueItems
+        .filter(it => it.host.toLowerCase().includes(q) || (it.title || '').toLowerCase().includes(q))
+        .slice(0, 8)
+        .forEach(it => res.push({
+          kind: 'host',
+          label: `${it.host}${it.title ? ' — ' + it.title : ''}`,
+          run: () => { closeCmd(); switchView('triage'); selectAsset(it.host); }
+        }));
+      res.push({
+        kind: 'hist',
+        label: `Search historical for "${q}"`,
+        run: () => {
+          closeCmd();
+          switchView('historical');
+          histTextQuery = q;
+          histCurrentPage = 0;
+          const inp = document.getElementById('filter-historical-search');
+          if (inp) inp.value = q;
+          fetchAndRenderHistorical();
+        }
+      });
+    }
+  }
+
+  cmdResults = res;
+  cmdCursor = 0;
+  renderCmd();
+}
+
+function renderCmd() {
+  const el = document.getElementById('cmdbar-results');
+  if (!cmdResults.length) {
+    el.innerHTML = '<div class="cmd-item"><span class="cmd-label" style="color:var(--fg-3)">No matches</span></div>';
+    return;
+  }
+  el.innerHTML = cmdResults.map((r, i) =>
+    `<div class="cmd-item ${i === cmdCursor ? 'on' : ''}" data-i="${i}" onclick="window._cmdRun(${i})">
+       <span class="cmd-kind">${r.kind}</span><span class="cmd-label">${esc(r.label)}</span>
+     </div>`).join('');
+}
+window._cmdRun = (i) => { const r = cmdResults[i]; if (r) r.run(); };
+
+(function wireCmdInput() {
+  const inp = document.getElementById('cmdbar-input');
+  if (!inp) return;
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); cmdCursor = Math.min(cmdResults.length - 1, cmdCursor + 1); renderCmd(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); cmdCursor = Math.max(0, cmdCursor - 1); renderCmd(); }
+    else if (e.key === 'Enter') { e.preventDefault(); const r = cmdResults[cmdCursor]; if (r) r.run(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeCmd(); }
+  });
+})();
 
 // Initialize
 loadExplorer();

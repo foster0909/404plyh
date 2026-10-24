@@ -25,7 +25,7 @@ module_crawl_endpoints() {
             "katana -list '$input' \
                 -d $KATANA_DEPTH \
                 -jc \
-                -c $THREADS \
+                -c $THREADS $(katana_rate_flag active)$(header_flags) \
                 -o '$ep_dir/katana.txt' 2>>'$LOG_FILE'"
         report_count "$ep_dir/katana.txt" "katana endpoints"
     fi

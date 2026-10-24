@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>404Plyh — Recon Triage Center</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -12,34 +12,44 @@
 
 /* ────── Design Tokens ────── */
 :root {
-  --bg-0: #0a0a0c;
-  --bg-1: #111114;
-  --bg-2: #18181c;
-  --bg-3: #1f1f25;
-  --border-0: #232329;
-  --border-1: #2e2e36;
-  --border-2: #3a3a44;
-  --fg-0: #fafafa;
-  --fg-1: #d4d4d8;
-  --fg-2: #a1a1aa;
-  --fg-3: #71717a;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-bg: rgba(99, 102, 241, 0.08);
-  --accent-border: rgba(99, 102, 241, 0.20);
-  --accent-glow: rgba(99, 102, 241, 0.15);
-  --green: #22c55e;
-  --green-bg: rgba(34, 197, 94, 0.08);
-  --red: #ef4444;
-  --red-bg: rgba(239, 68, 68, 0.08);
-  --amber: #f59e0b;
-  --amber-bg: rgba(245, 158, 11, 0.08);
-  --blue: #3b82f6;
-  --blue-bg: rgba(59, 130, 246, 0.08);
+  /* Graphite base — cool, layered, deliberate steps */
+  --bg-0: #0b0e13;
+  --bg-1: #10141b;
+  --bg-2: #151a22;
+  --bg-3: #1c222c;
+  --border-0: #222934;
+  --border-1: #2d3542;
+  --border-2: #3a4452;
+  --fg-0: #eef3f8;
+  --fg-1: #c2cad6;
+  --fg-2: #8a94a3;
+  --fg-3: #7c8694;
+  /* Accent is MONOCHROME — chrome (nav, buttons, focus, selection) stays
+     neutral; color is reserved for low-saturation signal only. */
+  --accent: #e6e9ee;
+  --accent-hover: #ffffff;
+  --accent-bg: rgba(255, 255, 255, 0.06);
+  --accent-border: rgba(255, 255, 255, 0.18);
+  --accent-glow: rgba(255, 255, 255, 0.09);
+  /* Semantic signal colors — deliberately low saturation (muted, not neon) */
+  --green: #7fae86;
+  --green-bg: rgba(127, 174, 134, 0.09);
+  --green-border: rgba(127, 174, 134, 0.22);
+  --red: #cf7b72;
+  --red-bg: rgba(207, 123, 114, 0.09);
+  --red-border: rgba(207, 123, 114, 0.24);
+  --amber: #c2a362;
+  --amber-bg: rgba(194, 163, 98, 0.09);
+  --amber-border: rgba(194, 163, 98, 0.24);
+  --blue: #8398be;
+  --blue-bg: rgba(131, 152, 190, 0.09);
+  --blue-border: rgba(131, 152, 190, 0.22);
   --mono: 'JetBrains Mono', 'Cascadia Code', monospace;
   --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --radius: 6px;
   --radius-lg: 10px;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.35);
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -47,7 +57,9 @@ html { height: 100%; }
 
 body {
   font-family: var(--sans);
-  background: var(--bg-0);
+  background:
+    radial-gradient(1100px 520px at 100% -8%, rgba(255, 255, 255, 0.025), transparent 60%),
+    var(--bg-0);
   color: var(--fg-1);
   font-size: 13px;
   line-height: 1.5;
@@ -161,6 +173,7 @@ body {
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .badge {
@@ -235,6 +248,8 @@ body {
 @keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
 /* ────── Buttons ────── */
+/* Class display rules (e.g. .btn) would otherwise override the hidden attribute. */
+[hidden] { display: none !important; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -256,15 +271,16 @@ body {
 .btn:hover { border-color: var(--border-1); color: var(--fg-1); background: var(--bg-3); }
 
 .btn-accent {
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent-hover), var(--accent));
   border-color: transparent;
-  color: #fff;
+  color: #0b0e13;
   font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), var(--shadow-1);
 }
 
-.btn-accent:hover { background: var(--accent-hover); border-color: transparent; }
+.btn-accent:hover { filter: brightness(1.08); border-color: transparent; }
 
-.btn-red { color: var(--red); border-color: rgba(239,68,68,0.2); }
+.btn-red { color: var(--red); border-color: var(--red-border); }
 .btn-red:hover { background: var(--red-bg); }
 
 .btn-sm { padding: 5px 10px; font-size: 11px; }
@@ -361,7 +377,8 @@ body {
   transition: all 0.12s var(--ease);
 }
 
-.target-card:hover { border-color: var(--border-1); background: var(--bg-2); }
+.target-card { box-shadow: var(--shadow-1); }
+.target-card:hover { border-color: var(--accent-border); background: var(--bg-2); }
 
 .tc-info { min-width: 0; }
 
@@ -402,7 +419,8 @@ body {
   transition: all 0.12s var(--ease);
 }
 
-.stat-box:hover { border-color: var(--border-1); }
+.stat-box { box-shadow: var(--shadow-1); }
+.stat-box:hover { border-color: var(--accent-border); background: var(--bg-2); }
 
 .stat-val {
   font-family: var(--mono);
@@ -429,6 +447,7 @@ body {
   border: 1px solid var(--border-0);
   border-radius: var(--radius-lg);
   padding: 16px;
+  box-shadow: var(--shadow-1);
 }
 
 .panel-hd {
@@ -579,8 +598,8 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   min-width: 42px;
 }
 
-.t-sev.high { background: var(--red-bg); color: var(--red); border: 1px solid rgba(239,68,68,0.15); }
-.t-sev.med { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(245,158,11,0.15); }
+.t-sev.high { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.t-sev.med { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
 .t-sev.low { background: var(--bg-3); color: var(--fg-3); border: 1px solid var(--border-0); }
 
 .t-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -610,7 +629,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   border-radius: 4px;
 }
 
-.t-tag.tech { color: var(--blue); border-color: rgba(59,130,246,0.15); }
+.t-tag.tech { color: var(--blue); border-color: var(--blue-border); }
 .t-tag.signal { color: var(--accent); border-color: var(--accent-border); }
 
 .t-meta {
@@ -703,7 +722,6 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
 }
 
 .lightbox.open { display: flex; }
@@ -777,18 +795,18 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   align-items: flex-start;
   padding-top: 5vh;
   overflow-y: auto;
-  backdrop-filter: blur(4px);
 }
 
 .overlay.open { display: flex; }
 
 .modal {
   background: var(--bg-1);
-  border: 1px solid var(--border-0);
+  border: 1px solid var(--border-1);
   border-radius: var(--radius-lg);
   width: 520px;
   max-width: 94vw;
   margin-bottom: 2rem;
+  box-shadow: var(--shadow-2);
 }
 
 .modal-hd {
@@ -858,6 +876,9 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 
 .adv-grid { display: none; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
 .adv-grid.open { display: grid; }
+.adv-grid .adv-wide { grid-column: 1 / -1; }
+.form-hint { display: block; font-size: 10px; color: var(--fg-3); margin-top: 3px; line-height: 1.4; }
+.adv-grid .scope-textarea { min-height: 52px; }
 
 /* Scope section in modal */
 .scope-section { border-top: 1px solid var(--border-0); padding-top: 14px; margin-top: 10px; }
@@ -901,7 +922,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 .spinner { width: 12px; height: 12px; border: 2px solid var(--accent-glow); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.progress-track { width: 100%; height: 4px; background: rgba(99,102,241,0.1); border-radius: 2px; overflow: hidden; }
+.progress-track { width: 100%; height: 4px; background: var(--accent-bg); border-radius: 2px; overflow: hidden; }
 .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); border-radius: 2px; transition: width 0.4s var(--ease); }
 
 /* ────── Diff Matrix ────── */
@@ -997,7 +1018,6 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   inset: 0;
   background: rgba(0,0,0,0.5);
   z-index: 40;
-  backdrop-filter: blur(2px);
 }
 
 .sidebar-overlay.on { display: block; }
@@ -1069,6 +1089,313 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 @media (min-width: 1280px) {
   .targets-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
+/* Toasts */
+#toast-host {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 32px));
+}
+.toast {
+  background: var(--bg-2);
+  color: var(--fg-1);
+  border: 1px solid var(--border-1);
+  border-left: 3px solid var(--fg-3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast-ok { border-left-color: var(--green); }
+.toast-err { border-left-color: var(--red); }
+.toast-warn { border-left-color: var(--amber); }
+.toast-info { border-left-color: var(--accent); }
+@media (max-width: 768px) {
+  #toast-host { left: 16px; right: 16px; bottom: 16px; max-width: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   JS ↔ CSS alignment — these class names are emitted by dashboard.js
+   (the stylesheet had drifted from the render code, leaving the Hunt
+   Queue, finding chips, overview cards, monitor badges, JS-rendered
+   tables, raw-file browser and module pills unstyled). Mapped here to
+   the existing design tokens.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Hunt Queue rows */
+.triage-row {
+  background: var(--bg-1); border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg); padding: 14px 16px;
+  display: flex; align-items: flex-start; gap: 12px;
+  transition: border-color .12s var(--ease), background .12s var(--ease);
+  cursor: pointer;
+}
+.triage-row:hover { border-color: var(--border-1); background: var(--bg-2); }
+.triage-row.triage-ignored { opacity: .3; }
+.triage-row.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-border), 0 0 0 3px var(--accent-glow);
+  background: var(--bg-2);
+}
+.triage-priority {
+  font-family: var(--mono); font-weight: 700; font-size: 9px;
+  padding: 3px 8px; border-radius: 4px; text-transform: uppercase;
+  letter-spacing: .04em; flex-shrink: 0; text-align: center; min-width: 46px;
+}
+.triage-priority.high { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.triage-priority.med  { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+.triage-priority.low  { background: var(--bg-3); color: var(--fg-3); border: 1px solid var(--border-0); }
+.triage-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.triage-title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.triage-host {
+  font-family: var(--mono); font-weight: 600; font-size: 12px; color: var(--fg-0);
+  text-decoration: none; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.triage-host:hover { color: var(--accent); }
+.triage-page-title { font-size: 11px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.triage-badges { display: flex; gap: 3px; flex-wrap: wrap; }
+.triage-badge {
+  font-family: var(--mono); font-size: 9px; background: var(--bg-0);
+  border: 1px solid var(--border-0); color: var(--fg-3); padding: 1px 6px; border-radius: 4px;
+}
+.triage-badge.tech { color: var(--blue); border-color: var(--blue-border); }
+.triage-findings { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.triage-actions { display: flex; gap: 4px; flex-shrink: 0; align-items: flex-start; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Finding chips */
+.finding-chip {
+  display: flex; align-items: baseline; gap: 6px; font-family: var(--mono);
+  font-size: 10px; padding: 2px 0 2px 8px; border-left: 2px solid transparent;
+}
+.finding-chip.sev-crit { border-color: var(--red); color: var(--fg-1); }
+.finding-chip.sev-high { border-color: var(--amber); color: var(--fg-1); }
+.finding-chip.sev-med  { border-color: var(--blue); color: var(--fg-2); }
+.finding-chip.sev-low  { border-color: var(--border-1); color: var(--fg-3); }
+.finding-icon { font-size: 8px; font-weight: 700; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; text-transform: uppercase; }
+.finding-chip.sev-crit .finding-icon { background: var(--red-bg); color: var(--red); }
+.finding-chip.sev-high .finding-icon { background: var(--amber-bg); color: var(--amber); }
+.finding-chip.sev-med  .finding-icon { background: var(--blue-bg); color: var(--blue); }
+.finding-chip.sev-low  .finding-icon { background: var(--bg-3); color: var(--fg-3); }
+.finding-link, .finding-text {
+  color: inherit; text-decoration: none; min-width: 0; flex: 0 1 auto;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.finding-link:hover { text-decoration: underline; }
+.finding-count { font-size: 9px; color: var(--fg-3); background: var(--bg-3); padding: 0 5px; border-radius: 3px; flex-shrink: 0; }
+.triage-findings, .overview-asset-findings, .dossier-finding { min-width: 0; overflow: hidden; }
+
+/* Expandable evidence (dossier) — preview in summary, raw text inside */
+.f-group > summary { list-style: none; cursor: pointer; }
+.f-group > summary::-webkit-details-marker { display: none; }
+.f-group > summary .finding-chip::after { content: '▸'; margin-left: auto; padding-left: 6px; color: var(--fg-3); flex-shrink: 0; }
+.f-group[open] > summary .finding-chip::after { content: '▾'; }
+.f-detail { margin: 4px 0 2px 10px; padding: 8px 10px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.f-detail-lbl { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-top: 2px; }
+.f-sources, .f-reasons { margin: 0; padding-left: 14px; font-family: var(--mono); font-size: 10px; color: var(--fg-2); }
+.f-sources li, .f-reasons li { overflow-wrap: anywhere; word-break: break-word; }
+.f-sources a { color: var(--fg-2); }
+.dossier-score { font-family: var(--mono); font-size: 10px; color: var(--fg-3); background: var(--bg-3); padding: 1px 7px; border-radius: 4px; }
+.score-why { background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); padding: 8px 10px; }
+.f-reasons { margin: 0; padding-left: 14px; font-family: var(--mono); font-size: 10px; color: var(--fg-1); }
+.f-reasons li { overflow-wrap: anywhere; }
+.f-raw {
+  margin: 0; max-height: 180px; overflow: auto; font-family: var(--mono); font-size: 10px;
+  color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; line-height: 1.5;
+}
+
+/* Overview top-asset cards */
+.overview-asset-card { background: var(--bg-1); border: 1px solid var(--border-0); border-radius: var(--radius-lg); padding: 12px 14px; margin-bottom: 8px; }
+.overview-asset-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.overview-asset-findings { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.finding-count-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; text-transform: uppercase; }
+.finding-count-badge.sev-crit { background: var(--red-bg); color: var(--red); }
+.finding-count-badge.sev-high { background: var(--amber-bg); color: var(--amber); }
+.finding-more { font-size: 10px; color: var(--fg-3); padding-left: 8px; }
+
+/* Overview / monitor mini stat boxes */
+/* ── Explorer scan tracker ─────────────────────────────────────────────── */
+.scan-tracker { margin-bottom: 16px; }
+.scan-tracker-hd { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.scan-tracker-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--fg-1); text-transform: uppercase; letter-spacing: .06em; }
+.scan-tracker-meta { font-size: 11px; color: var(--fg-3); }
+.scan-tracker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.scan-card { background: var(--bg-1); border: 1px solid var(--border-0); border-radius: var(--radius-lg); padding: 12px 14px; cursor: pointer; transition: border-color .12s, background .12s; }
+.scan-card:hover { border-color: var(--accent-border); background: var(--bg-2); }
+.scan-card.running { border-color: var(--accent-border); }
+.scan-card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.scan-card-host { font-family: var(--mono); font-weight: 600; font-size: 12px; color: var(--fg-0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.scan-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.scan-dot.running { background: var(--green); animation: scanpulse 1.6s infinite; }
+.scan-dot.done { background: var(--fg-3); }
+.scan-dot.failed { background: var(--red); }
+@keyframes scanpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }  /* opacity: GPU-composited, no per-frame repaint */
+.scan-card-kind { font-size: 9px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); background: var(--bg-3); padding: 1px 6px; border-radius: 3px; }
+.scan-card-step { font-size: 11px; color: var(--fg-2); margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-card-foot { display: flex; justify-content: space-between; font-size: 10px; color: var(--fg-3); font-family: var(--mono); margin-top: 6px; }
+.scan-prog { height: 5px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+.scan-prog-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s ease; }
+.scan-prog-fill.done { background: var(--green); }
+.scan-prog-fill.failed { background: var(--red); }
+
+/* ── Scan detail drawer (stage progression) ────────────────────────────── */
+.scan-detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 1200; justify-content: flex-end; }
+.scan-detail-overlay.open { display: flex; }
+.scan-detail-panel { width: min(560px, 94vw); background: var(--bg-1); border-left: 1px solid var(--border-1); display: flex; flex-direction: column; box-shadow: -8px 0 28px rgba(0,0,0,.45); }
+.scan-detail-hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border-0); }
+.scan-detail-host { font-family: var(--mono); font-weight: 700; font-size: 15px; color: var(--fg-0); word-break: break-all; }
+.scan-detail-sub { font-size: 11px; color: var(--fg-3); margin-top: 3px; }
+.scan-detail-bd { padding: 14px 16px; overflow-y: auto; flex: 1; }
+.stage-timeline { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+.stage-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: var(--radius); position: relative; }
+.stage-row.active { background: var(--accent-bg); }
+.stage-mark { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; border: 2px solid var(--border-2); display: flex; align-items: center; justify-content: center; font-size: 9px; }
+.stage-row.done .stage-mark { background: var(--green); border-color: var(--green); color: #000; }
+.stage-row.active .stage-mark { border-color: var(--accent); animation: scanpulse 1.6s infinite; }
+.stage-row.pending .stage-mark { opacity: .5; }
+.stage-label { flex: 1; font-size: 12px; color: var(--fg-1); }
+.stage-row.pending .stage-label { color: var(--fg-3); }
+.stage-dur { font-family: var(--mono); font-size: 10px; color: var(--fg-3); }
+.scan-detail-log-hd { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 6px; }
+.scan-detail-log { background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); padding: 10px; font-family: var(--mono); font-size: 10px; color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; line-height: 1.5; margin: 0; }
+@media (max-width: 640px) { .scan-tracker-grid { grid-template-columns: 1fr; } }
+
+/* Overview scan-summary ribbon — compact "time & scans done" strip */
+.scan-ribbon {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  background: var(--bg-1); border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg); padding: 9px 14px; margin-bottom: 12px;
+}
+.scan-ribbon .sr-item { display: flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--fg-3); }
+.scan-ribbon .sr-val { font-family: var(--mono); font-weight: 700; font-size: 13px; color: var(--fg-0); }
+.scan-ribbon .sr-lbl { text-transform: uppercase; letter-spacing: .05em; }
+.scan-ribbon .sr-sep { width: 1px; align-self: stretch; background: var(--border-0); }
+.scan-ribbon .sr-spark { display: flex; align-items: flex-end; gap: 2px; height: 22px; margin-left: auto; }
+.scan-ribbon .sr-bar { width: 6px; min-height: 2px; background: var(--border-2); border-radius: 1px; transition: background .12s; }
+.scan-ribbon .sr-bar:hover { background: var(--accent); }
+.scan-ribbon .sr-bar.sr-last { background: var(--accent); }
+.scan-ribbon .sr-spark-lbl { font-size: 9px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; align-self: center; margin-right: 2px; }
+@media (max-width: 640px) { .scan-ribbon .sr-spark { margin-left: 0; width: 100%; } }
+.overview-stat-box { background: var(--bg-2); border: 1px solid var(--border-0); border-radius: var(--radius); text-align: center; padding: 10px 14px; }
+.overview-stat-val { font-family: var(--mono); font-weight: 700; color: var(--fg-0); }
+.overview-stat-lbl { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+
+/* Monitor change badges */
+.badge-status { font-family: var(--mono); font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: var(--bg-3); color: var(--fg-2); }
+.badge-status.s2xx { background: var(--green-bg); color: var(--green); }
+.badge-status.s5xx { background: var(--red-bg); color: var(--red); }
+.badge-status.s-na { background: var(--bg-3); color: var(--fg-3); }
+
+/* JS-rendered tables */
+.custom-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.wrap-cell { white-space: normal !important; word-break: break-all; max-width: 520px; }
+.table-footer-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px 0; font-size: 11px; color: var(--fg-3); flex-wrap: wrap; gap: 8px; }
+
+/* Raw-file browser */
+.raw-file-item { padding: 6px 10px; border-radius: var(--radius); cursor: pointer; font-family: var(--mono); font-size: 10px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: all .1s; }
+.raw-file-item:hover { background: var(--bg-2); color: var(--fg-2); }
+.raw-file-item.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.raw-view-panel { background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--fg-2); white-space: pre-wrap; overflow: auto; line-height: 1.6; }
+
+/* Screenshot caption */
+.ss-footer { padding: 8px 12px; font-family: var(--mono); font-size: 10px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-top: 1px solid var(--border-0); }
+
+/* Scan-modal module pills */
+.mod-toggle { display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); cursor: pointer; font-size: 11px; color: var(--fg-3); transition: all .12s var(--ease); }
+.mod-toggle:hover { border-color: var(--border-1); color: var(--fg-2); }
+.mod-toggle.active { border-color: var(--accent); color: var(--fg-0); background: var(--accent-bg); }
+.mod-toggle .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-1); transition: background .12s; flex-shrink: 0; }
+.mod-toggle.active .dot { background: var(--accent); }
+
+/* ════════════════════════════════════════════════════════════════
+   REDESIGN — triage cockpit, asset dossier, command bar, keyboard
+   ════════════════════════════════════════════════════════════════ */
+
+/* Two-pane cockpit */
+.triage-cockpit { display: flex; gap: 12px; align-items: flex-start; }
+.triage-cockpit .triage-list { flex: 1; min-width: 0; }
+
+.dossier {
+  width: 380px; flex-shrink: 0; position: sticky; top: 0;
+  background: var(--bg-1); border: 1px solid var(--border-0);
+  border-radius: var(--radius-lg); max-height: calc(100vh - 150px);
+  overflow-y: auto; display: flex; flex-direction: column;
+}
+.dossier-empty { padding: 48px 20px; text-align: center; color: var(--fg-3); font-size: 12px; line-height: 1.8; }
+.dossier-hd { padding: 14px 16px; border-bottom: 1px solid var(--border-0); position: sticky; top: 0; background: var(--bg-1); z-index: 1; }
+.dossier-host { font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--fg-0); word-break: break-all; }
+.dossier-sub { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 11px; color: var(--fg-2); }
+.dossier-bd { padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; flex: 1; }
+.dossier-shot img { width: 100%; border-radius: var(--radius); border: 1px solid var(--border-0); cursor: pointer; display: block; }
+.dossier-sec-hd { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin-bottom: 6px; }
+.dossier-acts { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid var(--border-0); position: sticky; bottom: 0; background: var(--bg-1); }
+.dossier-close { display: none; margin-left: auto; }
+
+@media (max-width: 1100px) {
+  .dossier {
+    position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 92vw);
+    max-height: none; border-radius: 0; z-index: 95;
+    transform: translateX(100%); transition: transform .2s var(--ease);
+    box-shadow: -8px 0 28px rgba(0,0,0,.45);
+  }
+  .dossier.open { transform: translateX(0); }
+  .dossier-close { display: inline-flex; }
+}
+
+/* Command bar */
+.cmdbar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 1100; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.cmdbar-overlay.open { display: flex; }
+.cmdbar { width: 600px; max-width: 92vw; background: var(--bg-1); border: 1px solid var(--border-2); border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.cmdbar-input { width: 100%; height: 48px; background: transparent; border: none; border-bottom: 1px solid var(--border-0); color: var(--fg-0); font-family: var(--mono); font-size: 14px; padding: 0 16px; outline: none; }
+.cmdbar-results { max-height: 50vh; overflow-y: auto; }
+.cmd-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; cursor: pointer; font-size: 12px; color: var(--fg-2); }
+.cmd-item.on { background: var(--accent-bg); color: var(--fg-0); }
+.cmd-kind { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--fg-3); background: var(--bg-3); padding: 1px 6px; border-radius: 3px; flex-shrink: 0; width: 52px; text-align: center; }
+.cmd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.cmdbar-hint { padding: 8px 16px; font-size: 10px; color: var(--fg-3); border-top: 1px solid var(--border-0); display: flex; gap: 14px; flex-wrap: wrap; }
+
+/* Keyboard hints */
+kbd { font-family: var(--mono); font-size: 10px; background: var(--bg-3); border: 1px solid var(--border-1); border-bottom-width: 2px; border-radius: 4px; padding: 1px 5px; color: var(--fg-2); }
+.help-keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; font-size: 12px; }
+.help-keys .k { text-align: right; }
+.help-sec { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-3); margin: 14px 0 8px; grid-column: 1 / -1; }
+
+/* Finding tier model — dossier controls + tier summary */
+.dossier-finding { margin-bottom: 8px; }
+.f-controls { display: flex; gap: 6px; margin: 4px 0 2px 10px; }
+.f-ctrl { height: 24px; background: var(--bg-0); border: 1px solid var(--border-0); border-radius: var(--radius); color: var(--fg-2); font-family: var(--mono); font-size: 10px; padding: 0 6px; outline: none; cursor: pointer; }
+.f-ctrl:focus { border-color: var(--accent); }
+.tier-summary { display: inline-flex; gap: 5px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+.tier-pill { font-family: var(--mono); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 7px; border-radius: 4px; cursor: pointer; transition: box-shadow .12s var(--ease), opacity .12s var(--ease); }
+.tier-pill:hover { opacity: .85; }
+.tier-pill.tier-confirmed { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.tier-pill.tier-suspicious { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+.tier-pill.tier-observation { background: var(--bg-3); color: var(--fg-3); border: 1px solid var(--border-0); }
+.tier-pill.active { box-shadow: 0 0 0 2px var(--accent-glow); outline: 1px solid var(--accent); }
+
+/* Accessibility: visible keyboard focus + reduced motion */
+.btn:focus-visible, .sidebar-nav button:focus-visible, .tab-btn:focus-visible,
+.cmd-item:focus-visible, .target-card:focus-visible, .stat-box:focus-visible,
+.triage-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.triage-row:focus-visible { outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+
+/* ── Rendering performance (large scopes / mobile) ── */
+/* Off-screen rows and cards skip layout & paint until scrolled near. */
+.triage-row { content-visibility: auto; contain-intrinsic-size: auto 72px; }
+.ss-card { content-visibility: auto; contain-intrinsic-size: auto 172px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
 </style>
 </head>
 <body>
@@ -1081,7 +1408,35 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
       <button class="btn btn-accent" onclick="openScanModal()">+ New Scan</button>
     </div>
     <input type="text" class="input" id="explorer-search" placeholder="Search targets..." oninput="filterTargets(this.value)" style="width:100%;margin-bottom:12px;" />
+    <div class="scan-tracker" id="scan-tracker" hidden>
+      <div class="scan-tracker-hd">
+        <span class="scan-tracker-title">Scans</span>
+        <span class="scan-tracker-meta" id="scan-tracker-meta"></span>
+      </div>
+      <div class="scan-tracker-grid" id="scan-tracker-grid"></div>
+    </div>
     <div class="targets-grid" id="targets-container"></div>
+  </div>
+</div>
+
+<!-- ═══ Scan Detail Drawer ═══ -->
+<div class="scan-detail-overlay" id="scan-detail" onclick="if(event.target===this)closeScanDetail()">
+  <div class="scan-detail-panel" role="dialog" aria-label="Scan progression">
+    <div class="scan-detail-hd">
+      <div>
+        <div class="scan-detail-host" id="scan-detail-host"></div>
+        <div class="scan-detail-sub" id="scan-detail-sub"></div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm" id="scan-detail-stop" onclick="stopScanTarget(scanDetailTarget, this)" hidden>Stop</button>
+        <button class="btn btn-sm" onclick="closeScanDetail()" aria-label="Close">✕</button>
+      </div>
+    </div>
+    <div class="scan-detail-bd">
+      <div class="stage-timeline" id="scan-detail-timeline"></div>
+      <div class="scan-detail-log-hd">Live log</div>
+      <pre class="scan-detail-log" id="scan-detail-log"></pre>
+    </div>
   </div>
 </div>
 
@@ -1095,7 +1450,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-brand">
       <div class="logo">404Plyh<em>::triage</em></div>
-      <button class="close-btn" onclick="closeSidebar()">&times;</button>
+      <button class="close-btn" onclick="closeSidebar()" aria-label="Close menu">&times;</button>
     </div>
     <button class="sidebar-back" onclick="showExplorer()">
       <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clip-rule="evenodd"/></svg>
@@ -1104,6 +1459,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
     <ul class="sidebar-nav">
       <li class="on" id="nav-overview"><button onclick="switchView('overview')">Overview</button></li>
       <li id="nav-triage"><button onclick="switchView('triage')">Hunt Queue <span class="badge" id="badge-triage">0</span></button></li>
+      <li id="nav-triagereport"><button onclick="switchView('triagereport')">Triage Report</button></li>
       <li id="nav-assets"><button onclick="switchView('assets')">Assets <span class="badge" id="badge-assets">0</span></button></li>
       <li id="nav-webapps"><button onclick="switchView('webapps')">Web Apps <span class="badge" id="badge-webapps">0</span></button></li>
       <li id="nav-screenshots"><button onclick="switchView('screenshots')">Screenshots <span class="badge" id="badge-screenshots">0</span></button></li>
@@ -1122,7 +1478,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   <div class="main">
     <div class="topbar">
       <div class="topbar-l">
-        <button class="hamburger" onclick="openSidebar()">☰</button>
+        <button class="hamburger" onclick="openSidebar()" aria-label="Open menu">☰</button>
         <span class="topbar-domain" id="topbar-domain">--</span>
         <span class="topbar-meta">scanned: <b id="topbar-date">--</b></span>
       </div>
@@ -1151,6 +1507,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 
       <!-- VIEW: Overview -->
       <div class="view on" id="view-overview">
+        <div class="scan-ribbon" id="overview-scan-ribbon" hidden></div>
         <div class="stats-row" id="stats-grid"></div>
         <div class="panel-row">
           <div class="panel">
@@ -1174,8 +1531,19 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
           <button class="btn btn-sm" id="btn-triage-starred" onclick="filterTriagePriority('starred')">★</button>
           <input type="text" class="input toolbar-stretch" id="triage-search-input" placeholder="Search hosts, tech, findings..." oninput="filterTriageText(this.value)" />
           <label class="chk-label"><input type="checkbox" id="triage-hide-ignored" checked onchange="toggleHideIgnored(this.checked)" /> Hide ignored</label>
+          <label class="chk-label"><input type="checkbox" id="triage-hide-dismissed" onchange="toggleHideDismissed(this.checked)" /> Hide dismissed</label>
+          <button class="btn btn-sm" onclick="openCmd()" title="Command bar (press /)" aria-label="Open command bar">⌘K</button>
+          <span id="triage-tier-summary" class="tier-summary" title="Click a tier to filter"></span>
         </div>
-        <div class="triage-list" id="triage-list-container"></div>
+        <div class="triage-cockpit">
+          <div class="triage-list" id="triage-list-container"></div>
+          <aside class="dossier" id="asset-dossier" aria-label="Asset dossier">
+            <div class="dossier-empty">
+              Select an asset to open its dossier.<br>
+              <span style="font-size:11px;">Keys: <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>o</kbd> open · <kbd>s</kbd> star · <kbd>x</kbd> ignore · <kbd>?</kbd> help</span>
+            </div>
+          </aside>
+        </div>
       </div>
 
       <!-- VIEW: Assets -->
@@ -1205,7 +1573,11 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 
       <!-- VIEW: Screenshots -->
       <div class="view" id="view-screenshots">
+        <div class="toolbar">
+          <input type="text" class="input toolbar-stretch" id="filter-ss-search" placeholder="Filter screenshots by host..." oninput="screenshotsFilter(this.value)" />
+        </div>
         <div class="ss-grid" id="data-screenshots"></div>
+        <div class="tbl-foot" id="ss-pager"></div>
       </div>
 
       <!-- VIEW: Historical -->
@@ -1322,6 +1694,20 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
         </div>
       </div>
 
+      <!-- VIEW: Triage Report (reports/triage_report.md, written by the triage-results skill) -->
+      <div class="view" id="view-triagereport">
+        <div class="logs-panel">
+          <div class="logs-toolbar">
+            <div class="panel-hd" style="margin-bottom:0;">Triage Report</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn btn-sm" id="run-triage-btn" onclick="runTriage()" hidden>Run Triage</button>
+              <button class="btn btn-sm" onclick="loadTriageReport()">Refresh</button>
+            </div>
+          </div>
+          <div class="raw-view-panel" id="triage-report-body" style="white-space:pre-wrap;">Loading…</div>
+        </div>
+      </div>
+
       <!-- VIEW: Raw Files -->
       <div class="view" id="view-rawfiles">
         <div class="raw-layout">
@@ -1339,7 +1725,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   <div class="modal">
     <div class="modal-hd">
       <h3>New Scan</h3>
-      <button class="modal-x" onclick="closeScanModal()">&times;</button>
+      <button class="modal-x" onclick="closeScanModal()" aria-label="Close">&times;</button>
     </div>
     <div class="modal-bd">
       <div class="form-g">
@@ -1352,9 +1738,23 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
       </div>
       <button class="adv-btn" onclick="document.getElementById('adv-fields').classList.toggle('open')">Advanced ▾</button>
       <div class="adv-grid" id="adv-fields">
+        <div class="form-g">
+          <label class="form-lbl">Overall scan rate (req/s)</label>
+          <input class="form-input" id="scan-overall-rate" placeholder="150" />
+          <span class="form-hint">General pace for HTTP probing and port scanning.</span>
+        </div>
+        <div class="form-g">
+          <label class="form-lbl">Firewall-prone rate (req/s)</label>
+          <input class="form-input" id="scan-active-rate" placeholder="10" />
+          <span class="form-hint">Stages that trip WAFs / rate limits: crawl, JS fetch, dorks, historical validation. Kept ≤ overall.</span>
+        </div>
         <div class="form-g"><label class="form-lbl">Threads</label><input class="form-input" id="scan-threads" placeholder="15" /></div>
-        <div class="form-g"><label class="form-lbl">Rate Limit</label><input class="form-input" id="scan-rate" placeholder="150" /></div>
         <div class="form-g"><label class="form-lbl">Top Ports</label><input class="form-input" id="scan-ports" placeholder="1000" /></div>
+        <div class="form-g adv-wide">
+          <label class="form-lbl">Custom Headers (one per line)</label>
+          <textarea class="scope-textarea" id="scan-headers" placeholder="X-Bug-Bounty: your-handle&#10;Authorization: Bearer ..."></textarea>
+          <span class="form-hint">Sent only to the target (httpx / katana / JS fetches), never to DNS or passive sources.</span>
+        </div>
       </div>
       <!-- Scope Rules -->
       <div class="scope-section">
@@ -1384,7 +1784,7 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
   <div class="modal">
     <div class="modal-hd">
       <h3>Monitor Check</h3>
-      <button class="modal-x" onclick="closeMonitorModal()">&times;</button>
+      <button class="modal-x" onclick="closeMonitorModal()" aria-label="Close">&times;</button>
     </div>
     <div class="modal-bd">
       <div class="form-g">
@@ -1404,6 +1804,39 @@ td.wrap { white-space: normal; word-break: break-all; max-width: 400px; }
 <div class="lightbox" id="lightbox">
   <img id="lb-img" src="" alt="" />
   <div class="lb-cap" id="lb-label"></div>
+</div>
+
+<!-- ═══ Command Bar ═══ -->
+<div class="cmdbar-overlay" id="cmdbar-overlay" onclick="if(event.target===this)closeCmd()">
+  <div class="cmdbar" role="dialog" aria-modal="true" aria-label="Command bar">
+    <input class="cmdbar-input" id="cmdbar-input" placeholder="Jump to a view, host, or action…  (type to search)" oninput="window._cmdInput(this.value)" autocomplete="off" spellcheck="false" />
+    <div class="cmdbar-results" id="cmdbar-results"></div>
+    <div class="cmdbar-hint"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> run</span><span><kbd>esc</kbd> close</span></div>
+  </div>
+</div>
+
+<!-- ═══ Keyboard Help ═══ -->
+<div class="overlay" id="help-modal" onclick="if(event.target===this)closeHelp()">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+    <div class="modal-hd">
+      <h3>Keyboard Shortcuts</h3>
+      <button class="modal-x" onclick="closeHelp()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-bd">
+      <div class="help-keys">
+        <div class="help-sec">Global</div>
+        <div class="k"><kbd>/</kbd> or <kbd>⌘</kbd><kbd>K</kbd></div><div>Open command bar</div>
+        <div class="k"><kbd>?</kbd></div><div>This help</div>
+        <div class="k"><kbd>g</kbd> then <kbd>key</kbd></div><div>Go to view (o overview · q queue · a assets · w web · s shots · h historical · j js · p ports · d dorks · m monitor)</div>
+        <div class="k"><kbd>esc</kbd></div><div>Close panel / dialog</div>
+        <div class="help-sec">Hunt Queue</div>
+        <div class="k"><kbd>j</kbd> / <kbd>k</kbd></div><div>Move down / up</div>
+        <div class="k"><kbd>o</kbd> or <kbd>↵</kbd></div><div>Open selected asset URL</div>
+        <div class="k"><kbd>s</kbd></div><div>Star / unstar</div>
+        <div class="k"><kbd>x</kbd></div><div>Ignore / unignore</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="dashboard.js"></script>

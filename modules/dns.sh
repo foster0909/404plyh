@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
 # MODULE 2: DNS Resolution & Validation
-# Tools: puredns
+# Tools: dnsx (primary), puredns (fallback)
+#
+# Resolves the subdomain list down to the hostnames that actually have DNS
+# records. Output contract is unchanged: dns/resolved.txt holds one resolvable
+# hostname per line, so every downstream reader (http/ports modules, db.py) is
+# unaffected by the tool swap.
 # ─────────────────────────────────────────────────────────────────────────────
 
 module_dns_resolution() {
@@ -19,30 +24,39 @@ module_dns_resolution() {
         return 0
     fi
 
-    if ! require_tool "puredns"; then
-        warn "puredns not available. Copying raw subdomains as resolved."
+    # Resolve the active resolver file once (custom flag > bundled > none).
+    local resolver_file=""
+    if [[ -n "$RESOLVERS" && -f "$RESOLVERS" ]]; then
+        resolver_file="$RESOLVERS"
+        step "Using custom resolvers: $RESOLVERS"
+    elif [[ -f "$SCRIPT_DIR/resolvers.txt" ]]; then
+        resolver_file="$SCRIPT_DIR/resolvers.txt"
+        step "Using bundled resolvers: $SCRIPT_DIR/resolvers.txt"
+    else
+        info "No resolver file found; using the resolver's defaults."
+    fi
+
+    if require_tool "dnsx"; then
+        # dnsx prints hostnames that resolve (have >=1 record); -silent keeps the
+        # output to bare hostnames so resolved.txt stays a clean host list.
+        local dnsx_cmd="dnsx -l '$input' -silent -t $THREADS -o '$dns_dir/resolved.txt'"
+        [[ -n "$resolver_file" ]] && dnsx_cmd+=" -r '$resolver_file'"
+        run_safe "dnsx resolve" "$dnsx_cmd"
+    elif require_tool "puredns"; then
+        warn "dnsx not found; falling back to puredns."
+        local puredns_cmd="puredns resolve '$input' -w '$dns_dir/resolved.txt' -t $THREADS"
+        [[ -n "$resolver_file" ]] && puredns_cmd+=" -r '$resolver_file'"
+        run_safe "puredns resolve" "$puredns_cmd"
+    else
+        warn "Neither dnsx nor puredns available. Copying raw subdomains as resolved."
         cp "$input" "$dns_dir/resolved.txt"
         return 0
     fi
 
-    # Build puredns command
-    local puredns_cmd="puredns resolve '$input' -w '$dns_dir/resolved.txt' -t $THREADS"
-
-    if [[ -n "$RESOLVERS" && -f "$RESOLVERS" ]]; then
-        puredns_cmd+=" -r '$RESOLVERS'"
-        step "Using custom resolvers: $RESOLVERS"
-    elif [[ -f "$SCRIPT_DIR/resolvers.txt" ]]; then
-        puredns_cmd+=" -r '$SCRIPT_DIR/resolvers.txt'"
-        step "Using bundled resolvers: $SCRIPT_DIR/resolvers.txt"
-    else
-        warn "No resolver file found. puredns may fail — create resolvers.txt or use --resolvers."
-    fi
-
-    run_safe "puredns resolve" "$puredns_cmd"
-
-    # Fallback: if puredns failed and resolved.txt doesn't exist, copy raw subdomains
+    # Fallback: if resolution produced nothing, preserve the raw subdomains so
+    # the rest of the pipeline can still proceed.
     if [[ ! -s "$dns_dir/resolved.txt" ]]; then
-        warn "puredns produced no results (massdns may be missing). Using raw subdomains as fallback."
+        warn "DNS resolution produced no results. Using raw subdomains as fallback."
         cp "$input" "$dns_dir/resolved.txt"
     fi
 

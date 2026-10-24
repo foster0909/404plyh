@@ -60,6 +60,7 @@ module_infra_mapping() {
     if require_tool "whois"; then
         step "Running WHOIS lookups on unique IPs"
         if [[ -s "$infra_dir/unique_ips.txt" ]]; then
+            : > "$infra_dir/ip_orgs.txt"   # rebuilt per run (was appended forever)
             local ip_count=0
             while IFS= read -r ip; do
                 # Limit to first 20 IPs to avoid spamming WHOIS
@@ -90,7 +91,12 @@ module_infra_mapping() {
             # IP groups
             echo '    "ip_groups": {'
             local first=true
-            while IFS=' => ' read -r ip hosts; do
+            local line ip hosts
+            while IFS= read -r line; do
+                # Lines are "<ip> => <h1>, <h2>"; split on the literal " => "
+                # (IFS=' => ' left a stray "> " on the host list).
+                ip="${line%% => *}"
+                hosts="${line#* => }"
                 if [[ "$first" == true ]]; then
                     first=false
                 else

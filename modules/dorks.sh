@@ -228,15 +228,21 @@ module_dorks() {
         # Build probe URL list: each alive base URL × each sensitive path
         step "Building probe URL list"
         local probe_list="$dorks_dir/.probe_urls.tmp"
-        > "$probe_list"
+
+        # Drop the previous run's results first: active_confirmed.txt is what
+        # earns the `confirmed` tier, so a failed/interrupted probe must not
+        # leave last scan's hits to be re-ingested as this scan's.
+        rm -f "$dorks_dir/active_raw.json" "$dorks_dir/active_hits.txt" \
+              "$dorks_dir/active_200.txt" "$dorks_dir/active_403.txt" \
+              "$dorks_dir/active_confirmed.txt"
 
         while IFS= read -r base_url; do
             # Normalize: strip trailing slash
             base_url="${base_url%/}"
             for path in "${SENSITIVE_PATHS[@]}"; do
-                echo "${base_url}/${path}" >> "$probe_list"
+                echo "${base_url}/${path}"
             done
-        done < "$alive_file"
+        done < "$alive_file" > "$probe_list"
 
         local probe_count
         probe_count=$(wc -l < "$probe_list")
@@ -249,9 +255,10 @@ module_dorks() {
         run_safe "httpx dork probe" \
             "httpx -l '$probe_list' \
                 -sc -title -cl -server \
-                -t $DORK_THREADS -timeout $HTTPX_TIMEOUT \
+                -t $DORK_THREADS -timeout $HTTPX_TIMEOUT $(http_rate_flag active)$(header_flags) \
                 -mc 200,403 \
                 -json -o '$active_raw' 2>>'$LOG_FILE'"
+        rate_guard_http_backoff "$LOG_FILE"
 
         # Parse results into categorized output
         if [[ -s "$active_raw" ]]; then

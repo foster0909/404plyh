@@ -59,6 +59,7 @@ check_dependencies() {
 
     echo ""
     echo -e "${WHITE}DNS Resolution:${RESET}"
+    check_tool "dnsx" || ((missing_optional++))
     check_tool "puredns" || ((missing_optional++))
 
     echo ""

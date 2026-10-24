@@ -126,6 +126,14 @@ ENDJSON
     info "  ${BOLD}python3 $SCRIPT_DIR/dashboard.py -p $(dirname $OUTPUT_DIR)${RESET}"
 }
 
+# Escape text for HTML. Titles/server banners come from the target and are
+# attacker-controlled; this report is opened in a browser.
+# (sed, not ${s//…}: bash 5.2 treats "&" in a replacement as the match.)
+html_escape() {
+    printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' \
+        -e 's/"/\&quot;/g' -e "s/'/\\&#39;/g"
+}
+
 generate_html_report() {
     local output_file="$1"
     local total_subs="$2" resolved="$3" alive="$4" screenshots="$5"
@@ -163,7 +171,7 @@ HTMLHEAD
 
     cat >> "$output_file" <<HTMLBODY
 <h1>🔍 Recon Engine Report</h1>
-<p class="subtitle">Target: <strong>${DOMAIN}</strong> — Scanned: $(date)</p>
+<p class="subtitle">Target: <strong>$(html_escape "$DOMAIN")</strong> — Scanned: $(date)</p>
 
 <div class="stats-grid">
   <div class="stat-card"><div class="value">${total_subs}</div><div class="label">Subdomains</div></div>
@@ -186,7 +194,7 @@ HTMLBODY
             status=$(echo "$line" | grep -oP '\[\K[0-9]+(?=\])' | head -1)
             title=$(echo "$line" | grep -oP '\[\K[^\]]+(?=\])' | sed -n '2p')
             server=$(echo "$line" | grep -oP '\[\K[^\]]+(?=\])' | tail -1)
-            echo "<tr><td>${url}</td><td>${status:-N/A}</td><td>${title:-N/A}</td><td>${server:-N/A}</td></tr>" >> "$output_file"
+            echo "<tr><td>$(html_escape "$url")</td><td>$(html_escape "${status:-N/A}")</td><td>$(html_escape "${title:-N/A}")</td><td>$(html_escape "${server:-N/A}")</td></tr>" >> "$output_file"
         done
         echo '</table></div>' >> "$output_file"
     fi

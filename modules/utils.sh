@@ -7,13 +7,17 @@
 normalize_hosts() {
     local input="$1"
     local output="$2"
+    # Keep the apex itself and its subdomains; escape the dots so they match
+    # literally (an unescaped "." also accepted e.g. "a.exampleXcom").
+    local dom_re
+    dom_re=$(printf '%s' "${DOMAIN,,}" | sed 's/[.]/\\./g')
     if [[ -f "$input" ]]; then
         cat "$input" \
             | tr '[:upper:]' '[:lower:]' \
             | sed 's/^\*\.//g' \
             | sed 's/\.$//' \
             | sed '/^$/d' \
-            | grep -E "\.${DOMAIN}$" \
+            | grep -E "(^|\.)${dom_re}$" \
             | sort -u > "$output"
     else
         touch "$output"
@@ -24,7 +28,12 @@ normalize_hosts() {
 merge_dedup() {
     local output="$1"
     shift
-    cat "$@" 2>/dev/null | sort -u > "$output"
+    # Write to a temp file and atomically rename into place. This guarantees any
+    # concurrent reader (e.g. module_js_deep grepping historical/all_urls.txt
+    # while historical discovery runs in the background) sees either the old
+    # file or the complete new one — never a half-written result.
+    local tmp="${output}.tmp.$$"
+    cat "$@" 2>/dev/null | sort -u > "$tmp" && mv -f "$tmp" "$output" || rm -f "$tmp"
 }
 
 # Count and report

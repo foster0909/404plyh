@@ -27,8 +27,9 @@ module_http_probing() {
     run_safe "httpx probe" \
         "httpx -l '$input' \
             -sc -title -tech-detect -server -ip -follow-redirects \
-            -t $THREADS -timeout $HTTPX_TIMEOUT \
+            -t $THREADS -timeout $HTTPX_TIMEOUT $(http_rate_flag http)$(header_flags) \
             -json -o '$httpx_dir/results.json' 2>>'$LOG_FILE'"
+    rate_guard_http_backoff "$LOG_FILE"
 
     # Extract alive URLs
     if [[ -s "$httpx_dir/results.json" ]]; then

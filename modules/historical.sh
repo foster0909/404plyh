@@ -34,15 +34,12 @@ module_historical() {
         "$hist_dir/waybackurls.txt"
     report_count "$hist_dir/all_urls.txt" "Total unique historical URLs"
 
-    # ── Validate current accessibility ──
-    if [[ -s "$hist_dir/all_urls.txt" ]] && command -v httpx &>/dev/null; then
-        step "Validating historical URLs against live infrastructure"
-        httpx -l "$hist_dir/all_urls.txt" \
-            -sc -title -follow-redirects \
-            -t "$THREADS" \
-            -o "$hist_dir/alive.txt" 2>>"$LOG_FILE" || true
-        report_count "$hist_dir/alive.txt" "Still-accessible historical URLs"
-    fi
+    # NOTE: We intentionally do NOT httpx-probe the full all_urls.txt here.
+    # That probe (previously written to alive.txt) was expensive — often tens of
+    # thousands of requests — its output was consumed by nothing, and the
+    # --validate-historical stage already re-probes the *interesting* subset
+    # (historical/validated_interesting.json), which is what the dashboard and
+    # finding model use. Live validation of the sensitive subset lives there.
 
     success "Historical discovery complete."
 }

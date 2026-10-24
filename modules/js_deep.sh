@@ -5,6 +5,22 @@
 # Then runs local Python-based static analysis.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Rewrite "files/<md5>.js" references in a scanner report to the script's
+# original URL, in place, in one pass. Map lines are "<md5>.js => <url>"; URLs
+# may contain & | = so this must not go through sed's replacement syntax.
+js_map_report_urls() {
+    local map="$1" rep="$2"
+    awk 'NR == FNR { i = index($0, " => ")
+                     if (i) m[substr($0, 1, i - 1)] = substr($0, i + 4)
+                     next }
+         match($0, /files\/[0-9a-f]+\.js/) {
+             h = substr($0, RSTART + 6, RLENGTH - 6)
+             if (h in m) $0 = substr($0, 1, RSTART - 1) m[h] substr($0, RSTART + RLENGTH)
+         }
+         { print }' "$map" "$rep" > "$rep.tmp" \
+        && mv -f "$rep.tmp" "$rep" || rm -f "$rep.tmp"
+}
+
 module_js_deep() {
     if [[ "$SKIP_JS" == true ]]; then
         info "Skipping JavaScript analysis (--skip-js)"
@@ -36,7 +52,7 @@ module_js_deep() {
     # 1. Use katana to extract JS links from base HTML
     if require_tool "katana"; then
         run_safe "katana JS discovery" \
-            "katana -list '$input' -d 1 -jc -silent -o '$js_dir/.katana_js.tmp' 2>>'$LOG_FILE'"
+            "katana -list '$input' -d 1 -jc -silent $(katana_rate_flag active)$(header_flags) -o '$js_dir/.katana_js.tmp' 2>>'$LOG_FILE'"
         if [[ -s "$js_dir/.katana_js.tmp" ]]; then
             cat "$js_dir/.katana_js.tmp" >> "$raw_js"
             rm -f "$js_dir/.katana_js.tmp"
@@ -51,6 +67,18 @@ module_js_deep() {
         grep -iE '\.js(\?|$)' "$OUTPUT_DIR/historical/all_urls.txt" >> "$raw_js" 2>/dev/null || true
     fi
 
+    # Build curl custom-header args (array = no quoting/eval issues) and the
+    # active-tier inter-request throttle. These are direct-to-target fetches.
+    local -a curl_hdrs=()
+    if [[ -n "${CUSTOM_HEADERS:-}" ]]; then
+        local _h
+        while IFS= read -r _h; do
+            _h="${_h#"${_h%%[![:space:]]*}"}"
+            [[ -n "$_h" ]] && curl_hdrs+=(-H "$_h")
+        done <<< "$CUSTOM_HEADERS"
+    fi
+    local throttle; throttle="$(active_sleep)"
+
     # Filter, clean, and dedup
     local js_list="$js_dir/discovered_scripts.txt"
     if [[ -s "$raw_js" ]]; then
@@ -61,7 +89,7 @@ module_js_deep() {
         # Fallback: scrape directly using curl & grep if katana failed
         step "Katana JS discovery returned empty. Falling back to curl scraping."
         while IFS= read -r url; do
-            curl -s -k --connect-timeout 5 --max-time 10 "$url" \
+            curl -s -k --connect-timeout 5 --max-time 10 "${curl_hdrs[@]}" "$url" \
                 | grep -oiE "src=[\"']([^\"']+\.js[^\"']*)" \
                 | cut -d'"' -f2 | cut -d"'" -f2 \
                 | while read -r script; do
@@ -76,6 +104,7 @@ module_js_deep() {
                         echo "$base/$script" >> "$js_list"
                     fi
                 done
+            [[ -n "$throttle" ]] && sleep "$throttle"
         done < "$input"
         [[ -f "$js_list" ]] && sort -u -o "$js_list" "$js_list"
     fi
@@ -97,7 +126,7 @@ module_js_deep() {
     if require_tool "httpx"; then
         # Check status codes and content lengths
         run_safe "httpx scripts check" \
-            "httpx -l '$js_list' -sc -cl -follow-redirects -timeout $HTTPX_TIMEOUT -rate-limit 100 -json -o '$alive_json' 2>>'$LOG_FILE'"
+            "httpx -l '$js_list' -sc -cl -follow-redirects -timeout $HTTPX_TIMEOUT $(http_rate_flag active)$(header_flags) -json -o '$alive_json' 2>>'$LOG_FILE'"
         if [[ -s "$alive_json" ]]; then
             jq -r 'select(.status_code == 200) | .url' "$alive_json" > "$alive_list"
         fi
@@ -118,7 +147,13 @@ module_js_deep() {
         # Hash or sanitize filename to store locally
         local safe_name
         safe_name=$(echo -n "$url" | md5sum | cut -d' ' -f1).js
-        curl -s -k --connect-timeout 5 --max-time 15 "$url" > "$files_dir/$safe_name"
+        # Recursion rounds re-walk the whole script list; don't re-fetch what
+        # this run already downloaded (a fresh scan still refreshes everything).
+        if [[ "${RECURSION_ROUND:-0}" -gt 0 && -s "$files_dir/$safe_name" ]]; then
+            continue
+        fi
+        curl -s -k --connect-timeout 5 --max-time 15 "${curl_hdrs[@]}" "$url" > "$files_dir/$safe_name"
+        [[ -n "$throttle" ]] && sleep "$throttle"
         # Write metadata mapping (filename -> URL)
         echo "$safe_name => $url" >> "$js_dir/scripts_map.txt"
     done < "$alive_list"
@@ -139,7 +174,7 @@ module_js_deep() {
 
     if require_tool "httpx"; then
         run_safe "httpx source maps check" \
-            "httpx -l '$map_check_list' -sc -follow-redirects -timeout $HTTPX_TIMEOUT -rate-limit 100 -json -o '$live_maps_json' 2>>'$LOG_FILE'"
+            "httpx -l '$map_check_list' -sc -follow-redirects -timeout $HTTPX_TIMEOUT $(http_rate_flag active)$(header_flags) -json -o '$live_maps_json' 2>>'$LOG_FILE'"
         if [[ -s "$live_maps_json" ]]; then
             jq -r 'select(.status_code == 200) | .url' "$live_maps_json" > "$live_maps_list"
         fi
@@ -154,7 +189,8 @@ module_js_deep() {
             ((map_idx++))
             local map_name
             map_name=$(echo -n "$map_url" | md5sum | cut -d' ' -f1).js.map
-            curl -s -k --connect-timeout 5 --max-time 20 "$map_url" > "$js_dir/$map_name"
+            curl -s -k --connect-timeout 5 --max-time 20 "${curl_hdrs[@]}" "$map_url" > "$js_dir/$map_name"
+            [[ -n "$throttle" ]] && sleep "$throttle"
             # Reconstruct source code using Python helper
             python3 "$SCRIPT_DIR/modules/sourcemap_extractor.py" "$js_dir/$map_name" "$maps_dir" >> "$LOG_FILE" 2>&1
             # Add to map files index
@@ -177,17 +213,7 @@ module_js_deep() {
         step "Mapping scanned local filenames back to original URLs"
         for report in secrets.txt comments.txt; do
             local rep_file="$js_dir/$report"
-            if [[ -s "$rep_file" ]]; then
-                # Replace hashes with original URLs
-                while IFS=" => " read -r hash url; do
-                    # Strip leading spaces/formatting
-                    hash=$(echo "$hash" | xargs)
-                    url=$(echo "$url" | xargs)
-                    if [[ -n "$hash" && -n "$url" ]]; then
-                        sed -i "s|files/$hash|${url}|g" "$rep_file" 2>/dev/null || true
-                    fi
-                done < "$js_dir/scripts_map.txt"
-            fi
+            [[ -s "$rep_file" ]] && js_map_report_urls "$js_dir/scripts_map.txt" "$rep_file"
         done
     fi
 
@@ -218,7 +244,9 @@ module_js_deep() {
         fi
     fi
 
-    # Deduplicate and sort outputs
+    # Deduplicate and sort outputs (the maps are appended to every round/run)
+    [[ -f "$js_dir/scripts_map.txt" ]] && sort -u -o "$js_dir/scripts_map.txt" "$js_dir/scripts_map.txt"
+    [[ -f "$js_dir/maps_map.txt" ]] && sort -u -o "$js_dir/maps_map.txt" "$js_dir/maps_map.txt"
     [[ -f "$js_dir/endpoints.txt" ]] && sort -u -o "$js_dir/endpoints.txt" "$js_dir/endpoints.txt"
     [[ -f "$js_dir/secrets.txt" ]] && sort -u -o "$js_dir/secrets.txt" "$js_dir/secrets.txt"
     [[ -f "$js_dir/leakage.txt" ]] && sort -u -o "$js_dir/leakage.txt" "$js_dir/leakage.txt"

@@ -37,6 +37,11 @@ while IFS= read -r target_dir; do
     [[ -z "$target_dir" ]] && continue
     COUNT=$((COUNT + 1))
 
+    # Config entries must be plain folder names inside PROJECTS_DIR.
+    if [[ "$target_dir" == */* || "$target_dir" == .* ]]; then
+        echo "[!] Ignoring invalid target entry: $target_dir"
+        continue
+    fi
     target_path="$PROJECTS_DIR/$target_dir"
 
     if [[ ! -d "$target_path" ]]; then

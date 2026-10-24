@@ -91,19 +91,23 @@ monitor_scan_ports() {
         return 0
     fi
 
-    # Resolve DNS first if puredns is available
-    if require_tool "puredns"; then
+    # Resolve DNS first (dnsx primary, puredns fallback)
+    local _resolver=""
+    if [[ -n "$RESOLVERS" && -f "$RESOLVERS" ]]; then
+        _resolver="$RESOLVERS"
+    elif [[ -f "$SCRIPT_DIR/resolvers.txt" ]]; then
+        _resolver="$SCRIPT_DIR/resolvers.txt"
+    fi
+    if require_tool "dnsx"; then
+        local dnsx_cmd="timeout 180 dnsx -l '$sub_input' -silent -t $THREADS -o '$scan_dir/resolved.txt'"
+        [[ -n "$_resolver" ]] && dnsx_cmd+=" -r '$_resolver'"
+        run_safe "dnsx resolve (monitor)" "$dnsx_cmd"
+        [[ -s "$scan_dir/resolved.txt" ]] && sub_input="$scan_dir/resolved.txt"
+    elif require_tool "puredns"; then
         local puredns_cmd="timeout 180 puredns resolve '$sub_input' -w '$scan_dir/resolved.txt' -t $THREADS"
-        if [[ -n "$RESOLVERS" && -f "$RESOLVERS" ]]; then
-            puredns_cmd+=" -r '$RESOLVERS'"
-        elif [[ -f "$SCRIPT_DIR/resolvers.txt" ]]; then
-            puredns_cmd+=" -r '$SCRIPT_DIR/resolvers.txt'"
-        fi
+        [[ -n "$_resolver" ]] && puredns_cmd+=" -r '$_resolver'"
         run_safe "puredns resolve (monitor)" "$puredns_cmd"
-
-        if [[ -s "$scan_dir/resolved.txt" ]]; then
-            sub_input="$scan_dir/resolved.txt"
-        fi
+        [[ -s "$scan_dir/resolved.txt" ]] && sub_input="$scan_dir/resolved.txt"
     fi
 
     # naabu port scan

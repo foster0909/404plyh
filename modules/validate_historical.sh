@@ -159,8 +159,12 @@ module_validate_historical() {
     fi
 
     # Safe defaults requested by user:
-    # rate limit: 10 req/sec, threads: 5, timeout: 8, retries: 0
-    step "Validating $interesting_count interesting URLs (rate=10, threads=5, timeout=8)"
+    # Stealth step: cap at the stricter of ACTIVE_RATE and its conservative 10/s
+    # default so raising ACTIVE_RATE can slow it further but never speed it up.
+    local vrate="${ACTIVE_RATE:-10}"
+    [[ "$vrate" -gt 10 ]] 2>/dev/null && vrate=10
+    [[ -z "$vrate" || "$vrate" -lt 1 ]] 2>/dev/null && vrate=10
+    step "Validating $interesting_count interesting URLs (rate=$vrate, threads=5, timeout=8)"
     info "This step uses highly conservative rate limits to avoid blockages."
 
     run_safe "httpx validation (historical)" \
@@ -169,10 +173,11 @@ module_validate_historical() {
             -follow-redirects \
             -timeout 8 \
             -retries 0 \
-            -rate-limit 10 \
+            -rate-limit $vrate $(header_flags) \
             -threads 5 \
             -json \
             -o '$hist_dir/validated_interesting.json' 2>>'$LOG_FILE'"
+    rate_guard_http_backoff "$LOG_FILE"
 
     # ── 4. Generate clean text list & report ──
     if [[ -s "$hist_dir/validated_interesting.json" ]]; then
@@ -183,10 +188,10 @@ module_validate_historical() {
 
         # Quick summary of status codes
         local code_2xx code_3xx code_4xx code_5xx
-        code_2xx=$(grep -c '"status_code":2' "$hist_dir/validated_interesting.json" 2>/dev/null || echo 0)
-        code_3xx=$(grep -c '"status_code":3' "$hist_dir/validated_interesting.json" 2>/dev/null || echo 0)
-        code_4xx=$(grep -c '"status_code":4' "$hist_dir/validated_interesting.json" 2>/dev/null || echo 0)
-        code_5xx=$(grep -c '"status_code":5' "$hist_dir/validated_interesting.json" 2>/dev/null || echo 0)
+        code_2xx=$(grep -c '"status_code":2' "$hist_dir/validated_interesting.json" 2>/dev/null || true)
+        code_3xx=$(grep -c '"status_code":3' "$hist_dir/validated_interesting.json" 2>/dev/null || true)
+        code_4xx=$(grep -c '"status_code":4' "$hist_dir/validated_interesting.json" 2>/dev/null || true)
+        code_5xx=$(grep -c '"status_code":5' "$hist_dir/validated_interesting.json" 2>/dev/null || true)
 
         info "  ${GREEN}2xx: $code_2xx${RESET}  ${BLUE}3xx: $code_3xx${RESET}  ${YELLOW}4xx: $code_4xx${RESET}  ${RED}5xx: $code_5xx${RESET}"
     else
